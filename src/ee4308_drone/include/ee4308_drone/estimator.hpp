@@ -300,6 +300,11 @@ namespace ee4308::drone
             Eigen::Vector3d ECEF;
             // --- FIXME ---
             // params_.rad_polar, params_.rad_equator
+            const static double e2 = 1 - pow(params_.rad_polar,2) / pow(params_.rad_equator,2); // eccentricity squared
+            const double N = params_.rad_equator / sqrt(1-e2*pow(sin_lat,2));
+            ECEF(0) = (N+h)*cos_lat*cos_lon;
+            ECEF(1) = (N+h)*cos_lat*sin_lon;
+            ECEF(2) = (N*(1-e2)+h)*sin_lat;
             // --- EOFIXME ---
             return ECEF;
         }
