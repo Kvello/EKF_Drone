@@ -386,11 +386,18 @@ namespace ee4308::drone
                 return;
             }
 
-            // --- FIXME ---
-            // Ysonar_ = ...
+            // Apply lowpass filter (exponential forgetting)
+            const double alpha = 0.05;
+            Ysonar_ = alpha * new_Ysonar + (1 - alpha) * Ysonar_;
+            
+            double h_X_zk = Xz_(0);
+            // Create H vector [1 0]
+            Eigen::Matrix<double,1,2> H_sonar{1,0};
+            double R = params_.var_sonar;
             // Correct z
-            // params_.var_sonar
-            // --- EOFIXME ---
+            const Eigen::Vector2d K_z = Pz_*H_sonar.transpose()/(H_sonar*Pz_*H_sonar.transpose() + R);
+            Xz_ = Xz_ + K_z*(Ysonar_ - h_X_zk);
+            Pz_ = Pz_ - K_z*H_sonar*Pz_;
         }
 
         // ================================ Magnetic sub callback / EKF Correction ========================================
