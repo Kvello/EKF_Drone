@@ -439,6 +439,71 @@ namespace ee4308::drone
                 return;
             }
 
+            // Get the acceleration in the world frame
+            double phi = Xa_[0];
+            // Create a Eigen::Vector2d from the linear acceleration in the body frame
+            Eigen::Vector2d acc;
+            acc << msg.linear_acceleration.x, msg.linear_acceleration.y;
+
+            // Predict x
+            Eigen::Matrix2d Fxk;
+            Fxk << 1, dt, 0, 1;
+
+            Eigen::Matrix2d Wxk;
+            Wxk << 0.5*dt*dt*cos(phi), -0.5*dt*dt*sin(phi), dt*cos(phi), -dt*sin(phi);
+
+            Eigen::Matrix2d Qx;
+            Qx << params_.var_imu_x, 0, 0, params_.var_imu_y;
+
+            Xx_ = Fxk*Xx_ + Wxk*acc;
+            Px_ = Fxk*Px_*Fxk.transpose() + Wxk*Qx*Wxk.transpose();
+
+            //std::cout << "Xx_ = " << Xx_ << std::endl;
+
+            // Predict y
+            Eigen::Matrix2d Fyk;
+            Fyk << 1, dt, 0, 1;
+
+            Eigen::Matrix2d Wyk;
+            Wyk << -0.5*dt*dt*sin(phi), -0.5*dt*dt*cos(phi), -dt*sin(phi), -dt*cos(phi);
+
+            Eigen::Matrix2d Qy;
+            Qy << params_.var_imu_x, 0, 0, params_.var_imu_y;
+
+            Xy_ = Fyk*Xy_ + Wyk*acc;
+            Py_ = Fyk*Py_*Fyk.transpose() + Wyk*Qy*Wyk.transpose();
+
+            //std::cout << "Xy_ = " << Xy_ << std::endl;
+
+            // Predict z
+            Eigen::Matrix2d Fzk;
+            Fzk << 1, dt, 0, 1;
+
+            Eigen::Vector2d Wzk;
+            Wzk << 0.5*dt*dt, dt;
+
+            double Qz = params_.var_imu_z;
+
+            Xz_ = Fzk*Xz_ + Wzk*params_.var_imu_z;
+            Pz_ = Fzk*Pz_*Fzk.transpose() + Wzk*Qz*Wzk.transpose();
+
+            //std::cout << "Xz_ = " << Xz_ << std::endl;
+
+            // Predict a
+            Eigen::Matrix2d Fak;
+            Fak << 1, 0, 0, 0;
+
+            Eigen::Vector2d Wak;
+            Wak << dt, 1;
+
+            double Qa = params_.var_imu_a;
+
+            Xa_ = Fak*Xa_ + Wak*msg.angular_velocity.z;
+            Pa_ = Fak*Pa_*Fak.transpose() + Wak*Qa*Wak.transpose();
+
+            //std::cout << "Xa_ = " << msg.angular_velocity.z << std::endl;
+
+
             // !!! NOT ALLOWED TO USE ORIENTATION FROM IMU as ORIENTATION IS DERIVED FROM ANGULAR VELOCTIY !!!
 
             // !!! Store the states in Xx_, Xy_, Xz_, and Xa_.
