@@ -1,0 +1,28 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/parallels/EKF_Drone/install/sjtu_drone_description/include/**",
+        "/home/parallels/EKF_Drone/install/ee4308_lib/include/**",
+        "/home/parallels/EKF_Drone/install/ee4308_interfaces/include/**",
+        "/opt/ros/humble/include/**",
+        "/home/parallels/EKF_Drone/src/ee4308_drone/include/**",
+        "/home/parallels/EKF_Drone/src/ee4308_gazebo_plugins/include/**",
+        "/home/parallels/EKF_Drone/src/ee4308_lib/include/**",
+        "/home/parallels/EKF_Drone/src/ee4308_turtle/include/**",
+        "/home/parallels/EKF_Drone/src/sjtu_drone/sjtu_drone_description/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}
