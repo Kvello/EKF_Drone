@@ -340,17 +340,17 @@ namespace ee4308::drone
             // Correct x y z
             // params_.var_gps_x, ...y, ...z
             // Rotation matrix from ned to world
-            static const Eigen::Matrix3d R_mn {{
-                0, 1, 0,
-                1, 0, 0,
-                0, 0, -1
-            }};
+            static const Eigen::Matrix3d R_mn {
+                {0, 1, 0,},
+                {1, 0, 0},
+                {0, 0, -1}
+            };
             // Rotation matrix from ECEF to NED
-            const Eigen::Matrix3d R_ne{{
-                -sin_lat*cos_lon, -sin_lat*sin_lon, cos_lat,
-                -sin_lon, cos_lon, 0,
-                -cos_lat*cos_lon, -cos_lat*sin_lon, -sin_lat
-            }};
+            const Eigen::Matrix3d R_ne{
+                {-sin_lat*cos_lon, -sin_lat*sin_lon, cos_lat},
+                {-sin_lon, cos_lon, 0},
+                {-cos_lat*cos_lon, -cos_lat*sin_lon, -sin_lat}
+            };
             const Eigen::Vector3d ned = R_ne*(ECEF - initial_ECEF_);
             Ygps_ = R_mn*ned + initial_;
 
@@ -359,11 +359,11 @@ namespace ee4308::drone
             const static double R_gps_x = params_.var_gps_x;
             const static double R_gps_y = params_.var_gps_y;
             const static double R_gps_z = params_.var_gps_z;
-            const Eigen::MatrixXd K_x = Px_*H_gps.transpose()
+            const Eigen::Vector2d K_x = Px_*H_gps.transpose()
                     /(H_gps*Px_*H_gps.transpose() + R_gps_x);
-            const Eigen::MatrixXd K_y = Py_*H_gps.transpose()
+            const Eigen::Vector2d K_y = Py_*H_gps.transpose()
                     /(H_gps*Py_*H_gps.transpose() + R_gps_y);
-            const Eigen::MatrixXd K_z = Pz_*H_gps.transpose()
+            const Eigen::Vector2d K_z = Pz_*H_gps.transpose()
                     /(H_gps*Pz_*H_gps.transpose() + R_gps_z);
             Xx_ = Xx_ + K_x*(Ygps_(0) - H_gps*Xx_);
             Xy_ = Xy_ + K_y*(Ygps_(1) - H_gps*Xy_);
