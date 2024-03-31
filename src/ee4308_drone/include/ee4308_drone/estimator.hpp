@@ -70,11 +70,12 @@ namespace ee4308::drone
         rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr sub_gt_vel_;
         rclcpp::TimerBase::SharedPtr looper_;
 
-        Eigen::Vector2d Xx_ = {0, 0}, Xy_ = {0, 0}, Xa_ = {0, 0}, Xz_ = {0, 0};
+        Eigen::Vector2d Xx_ = {0, 0}, Xy_ = {0, 0}, Xa_ = {0, 0};
+        Eigen::Vector3d Xz_ = {0, 0, 0};
         Eigen::Matrix2d Px_ = Eigen::Matrix2d::Constant(1e3),
                         Py_ = Eigen::Matrix2d::Constant(1e3),
-                        Pa_ = Eigen::Matrix2d::Constant(1e3),
-                        Pz_ = Eigen::Matrix2d::Constant(1e3);
+                        Pa_ = Eigen::Matrix2d::Constant(1e3);
+        Eigen::Matrix3d Pz_ = Eigen::Matrix3d::Constant(1e3);
 
         // Eigen::Vector2d Xx_ = {0, 0}, Xy_ = {0, 0}, Xa_ = {0, 0};
         // Eigen::Vector3d Xz_ = {0, 0, 0};
@@ -356,6 +357,7 @@ namespace ee4308::drone
 
             // Run Kalman correction
             const static Eigen::Matrix<double,1,2> H_gps{1,0};
+            const static Eigen::Matrix<double,1,3> H_gps_z{1,0,0};
             const static double R_gps_x = params_.var_gps_x;
             const static double R_gps_y = params_.var_gps_y;
             const static double R_gps_z = params_.var_gps_z;
@@ -363,14 +365,14 @@ namespace ee4308::drone
                     /(H_gps*Px_*H_gps.transpose() + R_gps_x);
             const Eigen::Vector2d K_y = Py_*H_gps.transpose()
                     /(H_gps*Py_*H_gps.transpose() + R_gps_y);
-            const Eigen::Vector2d K_z = Pz_*H_gps.transpose()
-                    /(H_gps*Pz_*H_gps.transpose() + R_gps_z);
+            const Eigen::Vector3d K_z = Pz_*H_gps_z.transpose()
+                    /(H_gps_z*Pz_*H_gps_z.transpose() + R_gps_z);
             Xx_ = Xx_ + K_x*(Ygps_(0) - H_gps*Xx_);
             Xy_ = Xy_ + K_y*(Ygps_(1) - H_gps*Xy_);
-            Xz_ = Xz_ + K_z*(Ygps_(2) - H_gps*Xz_);
+            Xz_ = Xz_ + K_z*(Ygps_(2) - H_gps_z*Xz_);
             Px_ -= K_x*H_gps*Px_;
             Py_ -= K_y*H_gps*Py_;
-            Pz_ -= K_z*H_gps*Pz_;     
+            Pz_ -= K_z*H_gps_z*Pz_;     
             // --- EOFIXME ---
         }
 
@@ -387,15 +389,15 @@ namespace ee4308::drone
             }
 
             // Apply lowpass filter (exponential forgetting)
-            const double alpha = 0.05;
+            const double alpha = 0.5;
             Ysonar_ = alpha * new_Ysonar + (1 - alpha) * Ysonar_;
             
             double h_X_zk = Xz_(0);
             // Create H vector [1 0]
-            Eigen::Matrix<double,1,2> H_sonar{1,0};
+            Eigen::Matrix<double,1,3> H_sonar{1,0,0};
             double R = params_.var_sonar;
             // Correct z
-            const Eigen::Vector2d K_z = Pz_*H_sonar.transpose()/(H_sonar*Pz_*H_sonar.transpose() + R);
+            const Eigen::Vector3d K_z = Pz_*H_sonar.transpose()/(H_sonar*Pz_*H_sonar.transpose() + R);
             Xz_ = Xz_ + K_z*(Ysonar_ - h_X_zk);
             Pz_ = Pz_ - K_z*H_sonar*Pz_;
         }
@@ -432,9 +434,17 @@ namespace ee4308::drone
             //      Required for terminal printing during demonstration.
 
             (void) msg;
-
+            
             // --- FIXME ---
-            // Ybaro_ = ...
+            Ybaro_ = msg.point.z;
+            double h_X_zk = Xz_(0);
+            // Create H vector [1 0]
+            Eigen::Matrix<double,1,3> H_bar{1,0,0};
+            double R = params_.var_baro;
+            // Correct z
+            const Eigen::Vector3d K_z = Pz_*H_bar.transpose()/(H_bar*Pz_*H_bar.transpose() + R);
+            Xz_ = Xz_ + K_z*(Ybaro_ - h_X_zk - Xz_[2]);
+            Pz_ = Pz_ - K_z*H_bar*Pz_;
             // Correct z
             // params_.var_baro
             // --- EOFIXME ---
@@ -490,16 +500,16 @@ namespace ee4308::drone
             //std::cout << "Xy_ = " << Xy_ << std::endl;
 
             // Predict z
-            Eigen::Matrix2d Fzk;
-            Fzk << 1, dt, 0, 1;
+            Eigen::Matrix3d Fzk;
+            Fzk << 1, dt, 0, 0, 1, 0, 0, 0, 1;
 
-            Eigen::Vector2d Wzk;
-            Wzk << 0.5*dt*dt, dt;
+            Eigen::Vector3d Wzk;
+            Wzk << 0.5*dt*dt, dt, 0;
 
             double Qz = params_.var_imu_z;
 
             Xz_ = Fzk*Xz_ + Wzk*params_.var_imu_z;
-            Pz_ = Fzk*Pz_*Fzk.transpose() + Wzk*Qz*Wzk.transpose();
+            Pz_ = Fzk*Pz_*Fzk.transpose() + Wzk*Wzk.transpose()*Qz;
 
             //std::cout << "Xz_ = " << Xz_ << std::endl;
 
