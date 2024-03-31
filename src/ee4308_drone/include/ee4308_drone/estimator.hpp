@@ -302,9 +302,9 @@ namespace ee4308::drone
             // params_.rad_polar, params_.rad_equator
             const static double e2 = 1 - pow(params_.rad_polar,2) / pow(params_.rad_equator,2); // eccentricity squared
             const double N = params_.rad_equator / sqrt(1-e2*pow(sin_lat,2));
-            ECEF(0) = (N+h)*cos_lat*cos_lon;
-            ECEF(1) = (N+h)*cos_lat*sin_lon;
-            ECEF(2) = (N*(1-e2)+h)*sin_lat;
+            ECEF(0) = (N+alt)*cos_lat*cos_lon;
+            ECEF(1) = (N+alt)*cos_lat*sin_lon;
+            ECEF(2) = (N*(1-e2)+alt)*sin_lat;
             // --- EOFIXME ---
             return ECEF;
         }
@@ -339,6 +339,27 @@ namespace ee4308::drone
             // get world coords (Ygps_ = ...)
             // Correct x y z
             // params_.var_gps_x, ...y, ...z
+            // Rotation matrix from ned to world
+            static const Eigen::Matrix3d R_mn {{
+                0, 1, 0,
+                1, 0, 0,
+                0, 0, -1
+            }};
+            // Rotation matrix from ECEF to NED
+            const Eigen::Matrix3d R_ne{{
+                -sin_lat*cos_lon, -sin_lat*sin_lon, cos_lat,
+                -sin_lon, cos_lon, 0,
+                -cos_lat*cos_lon, -cos_lat*sin_lon, -sin_lat
+            }};
+            const Eigen::Vector3d ned = R_ne*(ECEF - initial_ECEF_);
+            Ygps_ = R_mn*ned + initial_;
+
+            // Run Kalman correction
+            const static Eigen::Matrix<double,1,2> H_gps{1,0};
+            const static double R_gps_x = params_.var_gps_x;
+            const static double R_gps_y = params_.var_gps_y;
+            const static double R_gps_z = params_.var_gps_z;
+            const Eigen::
             // --- EOFIXME ---
         }
 
