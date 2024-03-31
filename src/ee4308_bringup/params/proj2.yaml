@@ -20,7 +20,7 @@ drone:
         get_plan: "get_plan"
       topics:
         odom_drone: "odom2" # cannot use odom
-        waypoint: "waypoint" 
+        waypoint: "waypoint"
         cmd_vel: "cmd_vel"
         lookahead: "lookahead"
       frame_id: "/world"
@@ -74,7 +74,6 @@ drone:
       use_gt: true
       verbose: true
       use_sim_time: true
-
 
 ######################################################
 
