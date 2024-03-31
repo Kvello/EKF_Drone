@@ -359,7 +359,18 @@ namespace ee4308::drone
             const static double R_gps_x = params_.var_gps_x;
             const static double R_gps_y = params_.var_gps_y;
             const static double R_gps_z = params_.var_gps_z;
-            const Eigen::
+            const Eigen::MatrixXd K_x = Px_*H_gps.transpose()
+                    /(H_gps*Px_*H_gps.transpose() + R_gps_x);
+            const Eigen::MatrixXd K_y = Py_*H_gps.transpose()
+                    /(H_gps*Py_*H_gps.transpose() + R_gps_y);
+            const Eigen::MatrixXd K_z = Pz_*H_gps.transpose()
+                    /(H_gps*Pz_*H_gps.transpose() + R_gps_z);
+            Xx_ = Xx_ + K_x*(Ygps_(0) - H_gps*Xx_);
+            Xy_ = Xy_ + K_y*(Ygps_(1) - H_gps*Xy_);
+            Xz_ = Xz_ + K_z*(Ygps_(2) - H_gps*Xz_);
+            Px_ -= K_x*H_gps*Px_;
+            Py_ -= K_y*H_gps*Py_;
+            Pz_ -= K_z*H_gps*Pz_;     
             // --- EOFIXME ---
         }
 
