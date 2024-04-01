@@ -417,12 +417,14 @@ namespace ee4308::drone
             // Ymagnet_ = ...
             // Correct yaw
             // params_.var_magnet
-            Ymagnet_ = atan2(msg.vector.y, msg.vector.x);
+            // Magnetometer measurement is in a different frame with y'=-y            Ymagnet_ = atan2(-msg.vector.y, msg.vector.x);
+            std::cout<<"x: "<<msg.vector.x<<" y: "<<msg.vector.y<<std::endl;
+            std::cout<<"Ymagnet: "<<Ymagnet_<<std::endl;
             const static Eigen::Matrix<double,1,2> H_magnet{1,0};
             const static double R_magnet = params_.var_magnet;
             const Eigen::Vector2d K_a = Pa_*H_magnet.transpose()
                     /(H_magnet*Pa_*H_magnet.transpose() + R_magnet);
-            Xa_ = Xa_ + K_a*(Ymagnet_ - H_magnet*Xa_);
+            Xa_ = Xa_ + K_a*(limit_angle(Ymagnet_ - H_magnet*Xa_));
             Pa_ -= K_a*H_magnet*Pa_;
             // --- EOFIXME ---
         }
