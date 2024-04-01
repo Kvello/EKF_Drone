@@ -332,11 +332,28 @@ namespace ee4308::drone
             // params_.max_vert_vel, params_.max_vert_acc
             // cmd_vel_
             // params_.yaw_vel
-            // --- Remove the following code after fixing ---
-            cmd_vel_.linear.x = 0.5 * dx/ sqrt(dx*dx +dy*dy);
-            cmd_vel_.linear.y = 0.5 * dy/ sqrt(dx*dx + dy*dy);
-            cmd_vel_.linear.z = 0.25 * dz;
-            cmd_vel_.angular.z = 0;
+            const Eigen::Matrix2d R {
+                {cos(drone_yaw), sin(drone_yaw)},
+                {cos(drone_yaw), -sin(drone_yaw)*dy}
+            };
+            const Eigen::Vector2d e {dx, dy};
+            const Eigen ::Vector2d e_local = R * e;
+            const double prev_v_h = Eigen::Vector2d{cmd_vel_.linear.x, cmd_vel_.linear.y}.norm();
+            const double prev_v_z = cmd_vel_.linear.z;
+            const double v_h_desired = params_.kp_horz * e_local.norm();
+            const double v_z_desired = params_.kp_vert * dz;
+            double acc_h = (v_h_desired - prev_v_h) / elapsed_;
+            double acc_h = acc_h > params_.max_horz_acc ? params_.max_horz_acc : acc_h;
+            double acc_h = acc_h < -params_.max_horz_acc ? -params_.max_horz_acc : acc_h;
+            double acc_z = (v_z_desired - prev_v_z) / elapsed_;
+            double acc_z = acc_z > params_.max_vert_acc ? params_.max_vert_acc : acc_z;
+            double acc_z = acc_z < -params_.max_vert_acc ? -params_.max_vert_acc : acc_z;
+            const double v_h = prev_v_h + acc_h * elapsed_;
+            const double v_z = prev_v_z + acc_z * elapsed_;
+            cmd_vel_.linear.x = v_h * e_local(0) / e_local.norm();
+            cmd_vel_.linear.y = v_h * e_local(1) / e_local.norm();
+            cmd_vel_.linear.z = v_z;
+            cmd_vel_.angular.z = params_.yaw_vel;
             // --- EOFIXME ---
         }
     };
