@@ -334,7 +334,7 @@ namespace ee4308::drone
             // params_.yaw_vel
             const Eigen::Matrix2d R {
                 {cos(drone_yaw), sin(drone_yaw)},
-                {cos(drone_yaw), -sin(drone_yaw)*dy}
+                {cos(drone_yaw), -sin(drone_yaw)*dz}
             };
             const Eigen::Vector2d e {dx, dy};
             const Eigen ::Vector2d e_local = R * e;
