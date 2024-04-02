@@ -46,7 +46,6 @@ namespace ee4308::drone
         double var_baro = 0.1;
         double var_sonar = 0.1;
         double var_magnet = 0.1;
-        double var_process_magnet_bias = 0.1;
         double rad_polar = 6356752.3;
         double rad_equator = 6378137;
         double keep_old_sonar = 0.5;
@@ -138,7 +137,6 @@ namespace ee4308::drone
             initParam(this, "var_gps_x", params_.var_gps_x);
             initParam(this, "var_gps_y", params_.var_gps_y);
             initParam(this, "var_gps_z", params_.var_gps_z);
-            initParam(this, "var_process_magnet_bias", params_.var_process_magnet_bias);
             initParam(this, "rad_polar", params_.rad_polar);
             initParam(this, "rad_equator", params_.rad_equator);
             initParam(this, "keep_old_sonar", params_.keep_old_sonar);
@@ -514,7 +512,6 @@ namespace ee4308::drone
             // Processs noise on the bias state enters here
 
             double Qz = params_.var_imu_z;
-            double Qb = params_.var_process_magnet_bias;
             double G = params_.G;
             Xz_ = Fzk*Xz_ + Wzk*(msg.linear_acceleration.z-G);
             Pz_ = Fzk*Pz_*Fzk.transpose() + Wzk*Wzk.transpose()*Qz;
