@@ -46,6 +46,7 @@ namespace ee4308::drone
         double var_baro = 0.1;
         double var_sonar = 0.1;
         double var_magnet = 0.1;
+        double var_process_magnet_bias = 0.1;
         double rad_polar = 6356752.3;
         double rad_equator = 6378137;
         double keep_old_sonar = 0.5;
@@ -137,6 +138,7 @@ namespace ee4308::drone
             initParam(this, "var_gps_x", params_.var_gps_x);
             initParam(this, "var_gps_y", params_.var_gps_y);
             initParam(this, "var_gps_z", params_.var_gps_z);
+            initParam(this, "var_process_magnet_bias", params_.var_process_magnet_bias);
             initParam(this, "rad_polar", params_.rad_polar);
             initParam(this, "rad_equator", params_.rad_equator);
             initParam(this, "keep_old_sonar", params_.keep_old_sonar);
@@ -423,7 +425,7 @@ namespace ee4308::drone
             const static double R_magnet = params_.var_magnet;
             const Eigen::Vector2d K_a = Pa_*H_magnet.transpose()
                     /(H_magnet*Pa_*H_magnet.transpose() + R_magnet);
-            Xa_ = Xa_ + K_a*(limit_angle(Ymagnet_ - H_magnet*Xa_));
+            Xa_ += K_a*(limit_angle(Ymagnet_ - H_magnet*Xa_));
             Pa_ -= K_a*H_magnet*Pa_;
             // --- EOFIXME ---
         }
@@ -438,14 +440,14 @@ namespace ee4308::drone
             
             // --- FIXME ---
             Ybaro_ = msg.point.z;
-            double h_X_zk = Xz_(0);
-            // Create H vector [1 0]
-            Eigen::Matrix<double,1,3> H_bar{1,0,0};
+            // Create H vector [1 0, 1]
+            Eigen::Matrix<double,1,3> H_bar{1,0,1};
             double R = params_.var_baro;
             // Correct z
+
             const Eigen::Vector3d K_z = Pz_*H_bar.transpose()/(H_bar*Pz_*H_bar.transpose() + R);
-            Xz_ = Xz_ + K_z*(Ybaro_ - h_X_zk - Xz_(2));
-            Pz_ = Pz_ - K_z*H_bar*Pz_;
+            Xz_ += K_z*(Ybaro_ - H_bar*Xz_);
+            Pz_ -= K_z*H_bar*Pz_;
             std::cout<<"Barometer bias: "<<Xz_(2)<<std::endl;
             std::cout<<"Covariance matrix for z after baro update: "<<Pz_<<std::endl;
             // Correct z
@@ -509,9 +511,12 @@ namespace ee4308::drone
             Eigen::Vector3d Wzk;
             Wzk << 0.5*dt*dt, dt, 0;
 
-            double Qz = params_.var_imu_z;
+            // Processs noise on the bias state enters here
 
-            Xz_ = Fzk*Xz_ + Wzk*params_.var_imu_z;
+            double Qz = params_.var_imu_z;
+            double Qb = params_.var_process_magnet_bias;
+            double G = params_.G;
+            Xz_ = Fzk*Xz_ + Wzk*(msg.linear_acceleration.z-G);
             Pz_ = Fzk*Pz_*Fzk.transpose() + Wzk*Wzk.transpose()*Qz;
 
             //std::cout << "Xz_ = " << Xz_ << std::endl;
