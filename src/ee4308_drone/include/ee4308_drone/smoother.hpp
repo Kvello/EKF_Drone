@@ -134,17 +134,25 @@ namespace ee4308::drone
             nav_msgs::msg::Path plan;
             // --- FIXME ---
             // params_.interval;
-            // --- Remove the following code after fixing ---
-            geometry_msgs::msg::PoseStamped pose_stamped;
-            pose_stamped.pose.position.x = start.pose.position.x; 
-            pose_stamped.pose.position.y = start.pose.position.y; 
-            pose_stamped.pose.position.z = start.pose.position.z; 
-            plan.poses.push_back(pose_stamped);
-            pose_stamped.pose.position.x = goal.pose.position.x; 
-            pose_stamped.pose.position.y = goal.pose.position.y; 
-            pose_stamped.pose.position.z = goal.pose.position.z; 
-            plan.poses.push_back(pose_stamped);
-            // --- EOFIXME ---
+            // Create a vector with eigen from start to goal
+            Eigen::Vector3d start_eigen = {start.pose.position.x, start.pose.position.y, start.pose.position.z};
+            Eigen::Vector3d goal_eigen = {goal.pose.position.x, goal.pose.position.y, goal.pose.position.z};
+            Eigen::Vector3d diff = goal_eigen - start_eigen;
+            double distance = diff.norm();
+            Eigen::Vector3d path_direction = diff/distance;
+
+            for (double i = 0; i <= distance; i += params_.interval)
+            {
+                geometry_msgs::msg::PoseStamped ps;
+                ps.pose.position.x = start.pose.position.x + i*path_direction(0); 
+                ps.pose.position.y = start.pose.position.y + i*path_direction(1); 
+                ps.pose.position.z = start.pose.position.z + i*path_direction(2); 
+                plan.poses.push_back(ps);
+            }
+
+            // Add the goal point to the plan
+            plan.poses.push_back(goal);
+            
             return plan;
         }
     };
