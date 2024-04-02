@@ -444,8 +444,10 @@ namespace ee4308::drone
             double R = params_.var_baro;
             // Correct z
             const Eigen::Vector3d K_z = Pz_*H_bar.transpose()/(H_bar*Pz_*H_bar.transpose() + R);
-            Xz_ = Xz_ + K_z*(Ybaro_ - h_X_zk - Xz_[2]);
+            Xz_ = Xz_ + K_z*(Ybaro_ - h_X_zk - Xz_(2));
             Pz_ = Pz_ - K_z*H_bar*Pz_;
+            std::cout<<"Barometer bias: "<<Xz_(2)<<std::endl;
+            std::cout<<"Covariance matrix for z after baro update: "<<Pz_<<std::endl;
             // Correct z
             // params_.var_baro
             // --- EOFIXME ---
