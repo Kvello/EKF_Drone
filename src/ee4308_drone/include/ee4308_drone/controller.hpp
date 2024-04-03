@@ -311,9 +311,53 @@ namespace ee4308::drone
             // Get a thread-safe copy of the plan. A more efficient way is to use a lock guard here and use the plan directly without copying.
             std::vector<geometry_msgs::msg::PoseStamped> plan = getPlan();
 
+            // Print all points in the plan
+            // for (long unsigned int i = 0; i < plan.size(); i++)
+            // {
+            //     std::cout << "point " << i << ": " << plan[i].pose.position.x << ", " << plan[i].pose.position.y << ", " << plan[i].pose.position.z << std::endl;
+            // }
+
+            //lookahead_.point = plan.back().pose.position;
+            //std::cout << "lookahead point: " << lookahead_.point.x << ", " << lookahead_.point.y << ", " << lookahead_.point.z << std::endl;
+            //return;
+
             // --- FIXME ---
             // params_.lookahead_distance
-            lookahead_.point = plan.back().pose.position;
+
+            // Find the closest point on the path to the drone
+            double min_dist = 1e9;
+            int min_idx = -1;
+            for (long unsigned int i = 0; i < plan.size(); i++)
+            {
+                double dx = plan[i].pose.position.x - drone_pose.position.x;
+                double dy = plan[i].pose.position.y - drone_pose.position.y;
+                double dz = plan[i].pose.position.z - drone_pose.position.z;
+                double dist = sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist < min_dist)
+                {
+                    min_dist = dist;
+                    min_idx = i;
+                }
+            }
+            // Closest point on the path is plan[min_idx]
+
+            // Find the lookahead point
+            long unsigned int lookahead_idx = min_idx;
+            double lookahead_dist = 0;
+            while (lookahead_dist < params_.lookahead_distance && lookahead_idx < plan.size() - 1)
+            {
+                double dx = plan[lookahead_idx + 1].pose.position.x - plan[lookahead_idx].pose.position.x;
+                double dy = plan[lookahead_idx + 1].pose.position.y - plan[lookahead_idx].pose.position.y;
+                double dz = plan[lookahead_idx + 1].pose.position.z - plan[lookahead_idx].pose.position.z;
+                double dist = sqrt(dx * dx + dy * dy + dz * dz);
+                lookahead_dist += dist;
+                lookahead_idx++;
+            }
+
+            lookahead_.point = plan[lookahead_idx].pose.position;
+
+            // Print lookahead_.point = plan[lookahead_idx].pose.position
+            //std::cout << "lookahead point: " << lookahead_.point.x << ", " << lookahead_.point.y << ", " << lookahead_.point.z << std::endl;
             // --- EOFIXME ---
         }
 
