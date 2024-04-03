@@ -369,6 +369,7 @@ namespace ee4308::drone
             double dy = lookahead_.point.y - drone_pose.position.y;
             double dz = lookahead_.point.z - drone_pose.position.z;
             double drone_yaw = quaternionToYaw(drone_pose.orientation);
+            std::cout << drone_yaw << std::endl;
 
             // --- FIXME ---
             // params_.kp_horz, params.kp_vert
@@ -376,10 +377,8 @@ namespace ee4308::drone
             // params_.max_vert_vel, params_.max_vert_acc
             // cmd_vel_
             // params_.yaw_vel
-            const Eigen::Matrix2d R {
-                {cos(drone_yaw), sin(drone_yaw)},
-                {cos(drone_yaw), -sin(drone_yaw)*dz}
-            };
+            Eigen::Matrix2d R;
+            R << cos(-drone_yaw), -sin(-drone_yaw), sin(-drone_yaw), cos(-drone_yaw);
             const Eigen::Vector2d e {dx, dy};
             const Eigen ::Vector2d e_local = R * e;
             const double prev_v_h = Eigen::Vector2d{cmd_vel_.linear.x, cmd_vel_.linear.y}.norm();
