@@ -49,7 +49,8 @@ namespace ee4308::drone
         double var_gps_z = 0.1;
         double var_baro = 0.1;
         double var_sonar = 0.1;
-        double var_magnet = 0.1;
+        double var_magnet_x = 0.1;
+        double var_magnet_y = 0.1;
         double rad_polar = 6356752.3;
         double rad_equator = 6378137;
         double keep_old_sonar = 0.5;
@@ -141,6 +142,10 @@ namespace ee4308::drone
             initParam(this, "var_gps_x", params_.var_gps_x);
             initParam(this, "var_gps_y", params_.var_gps_y);
             initParam(this, "var_gps_z", params_.var_gps_z);
+            initParam(this, "var_baro", params_.var_baro);
+            initParam(this, "var_magnet_x", params_.var_magnet_x);
+            initParam(this, "var_magnet_y", params_.var_magnet_y);
+            initParam(this, "var_sonar", params_.var_sonar);
             initParam(this, "rad_polar", params_.rad_polar);
             initParam(this, "rad_equator", params_.rad_equator);
             initParam(this, "keep_old_sonar", params_.keep_old_sonar);
@@ -426,8 +431,8 @@ namespace ee4308::drone
             // Magnetometer measurement is in a different frame with y'=-y
             Ymagnet_ = atan2(-msg.vector.y, msg.vector.x);
             const static Eigen::Matrix<double,1,2> H_magnet{1,0};
-            // R_magnet = sqrt((pow(Xa_(0)*params_.var_magnet_y,2) + pow(Xa_(1)*params_.var_magnet_x,2)))/(pow(Xa_(0),2) + pow(Xa_(1),2));
-            const static double R_magnet = params_.var_magnet;
+            const double R_magnet = sqrt((pow(Xa_(0)*params_.var_magnet_y,2) + pow(Xa_(1)*params_.var_magnet_x,2)))
+                                        /(pow(Xa_(0),2) + pow(Xa_(1),2));
             const Eigen::Vector2d K_a = Pa_*H_magnet.transpose()
                     /(H_magnet*Pa_*H_magnet.transpose() + R_magnet);
             Xa_ += K_a*(limit_angle(Ymagnet_ - H_magnet*Xa_));
