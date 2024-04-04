@@ -28,6 +28,8 @@ void Statistician::initTopics(){
         params_.topics.gps, 10, std::bind(&Statistician::gps_callback, this, std::placeholders::_1));
     sonar_sub = this->create_subscription<sensor_msgs::msg::Range>(
         params_.topics.sonar, 10, std::bind(&Statistician::sonar_callback, this, std::placeholders::_1));
+    RCLCPP_INFO_STREAM(this->get_logger(), "Subscribed to topics.");
+    return;
 }
 
 // void Statistician::initParams(){
@@ -74,7 +76,7 @@ Statistician::Statistician(std::string node_name)
     gt_vel_data = Eigen::Matrix<double, 3, Eigen::Dynamic>::Zero(3, num_samples);
     baro_data = Eigen::Matrix<double, 1, Eigen::Dynamic>::Zero(1, num_samples);
     magnetic_data = Eigen::Matrix<double, 2, Eigen::Dynamic>::Zero(2, num_samples);
-    imu_data = Eigen::Matrix<double, 3, Eigen::Dynamic>::Zero(3, num_samples);
+    imu_data = Eigen::Matrix<double, 4, Eigen::Dynamic>::Zero(4, num_samples);
     gps_data = Eigen::Matrix<double, 3, Eigen::Dynamic>::Zero(3, num_samples);
     sonar_data = Eigen::Matrix<double, 1, Eigen::Dynamic>::Zero(1, num_samples);
 
@@ -86,61 +88,65 @@ Statistician::Statistician(std::string node_name)
     imu_data_ready = false;
     gps_data_ready = false;
     sonar_data_ready = false;
+    RCLCPP_INFO_STREAM(this->get_logger(), "Initialized statistician node.");
 }
 
 void Statistician::calculate_statistics(){
-    Eigen::Vector3d imu_mean = imu_data.rowwise().mean();
+    Eigen::Vector4d imu_mean = imu_data.rowwise().mean();
     Eigen::Vector3d gps_mean = gps_data.rowwise().mean();
     Eigen::Vector2d magnetic_mean = magnetic_data.rowwise().mean();
     double baro_mean = baro_data.mean(); 
     double sonar_mean = sonar_data.mean();
-
-    Eigen::Matrix3d imu_cov = 1/(params_.num_samples-1)*
+    Eigen::Matrix4d imu_cov = 1.0/(params_.num_samples-1)*
         (imu_data.colwise() - imu_mean)*(imu_data.colwise() - imu_mean).transpose();
-    Eigen::Matrix3d gps_cov = 1/(params_.num_samples-1)*
+    Eigen::Matrix3d gps_cov = 1.0/(params_.num_samples-1)*
         (gps_data.colwise() - gps_mean)*(gps_data.colwise() - gps_mean).transpose();
-    Eigen::Matrix2d magnetic_cov = 1/(params_.num_samples-1)*
+    Eigen::Matrix2d magnetic_cov = 1.0/(params_.num_samples-1)*
         (magnetic_data.colwise() - magnetic_mean)*(magnetic_data.colwise() - magnetic_mean).transpose();
-    double baro_var = 1/(params_.num_samples-1)*(baro_data.array() - baro_mean).square().sum();
-    double sonar_var = 1/(params_.num_samples-1)*(sonar_data.array() - sonar_mean).square().sum();
+    double baro_var = 1.0/(params_.num_samples-1)*(baro_data.array() - baro_mean).square().sum();
+    double sonar_var = 1.0/(params_.num_samples-1)*(sonar_data.array() - sonar_mean).square().sum();
 
     Eigen::MatrixXd gt_pose_z = gt_pose_data.row(2);
 
-    double baro_bias = (baro_data- gt_pose_z).mean();
-    double baro_bias_var = 1/(params_.num_samples-1)*(baro_data.array() - gt_pose_z.array()).square().sum();
+    double baro_bias = (baro_data - gt_pose_z).mean();
+    double baro_bias_var = 1.0/(params_.num_samples-1)*(baro_data.array() - baro_bias).square().sum();
 
-    // TODO: Estimate optimal FIR Wiener filter for sonar data
-    
+    // TODO: Estimate optimal FIR Wiener filter for sonar data 
     std::ofstream output_file;
     output_file.open(params_.output_file);
-    output_file << "imu_mean_x,imu_mean_y,imu_mean_z,";
-    output_file << "gps_mean_x,gps_mean_y,gps_mean_z,";
-    output_file << "magnetic_mean_x,magnetic_mean_y,";
-    output_file << "baro_mean,sonar_mean,";
-    output_file << "imu_cov_xx,imu_cov_xy,imu_cov_xz,";
-    output_file << "imu_cov_yx,imu_cov_yy,imu_cov_yz,";
-    output_file << "imu_cov_zx,imu_cov_zy,imu_cov_zz,";
-    output_file << "gps_cov_xx,gps_cov_xy,gps_cov_xz,";
-    output_file << "gps_cov_yx,gps_cov_yy,gps_cov_yz,";
-    output_file << "gps_cov_zx,gps_cov_zy,gps_cov_zz,";
-    output_file << "magnetic_cov_xx,magnetic_cov_xy,";
-    output_file << "magnetic_cov_yx,magnetic_cov_yy,";
-    output_file << "baro_var,sonar_var,";
-    output_file << "baro_bias,baro_bias_var\n";
-    output_file << imu_mean(0) << "," << imu_mean(1) << "," << imu_mean(2) << ",";
-    output_file << gps_mean(0) << "," << gps_mean(1) << "," << gps_mean(2) << ",";
-    output_file << magnetic_mean(0) << "," << magnetic_mean(1) << ",";
-    output_file << baro_mean << "," << sonar_mean << ",";
-    output_file << imu_cov(0,0) << "," << imu_cov(0,1) << "," << imu_cov(0,2) << ",";
-    output_file << imu_cov(1,0) << "," << imu_cov(1,1) << "," << imu_cov(1,2) << ",";
-    output_file << imu_cov(2,0) << "," << imu_cov(2,1) << "," << imu_cov(2,2) << ",";
-    output_file << gps_cov(0,0) << "," << gps_cov(0,1) << "," << gps_cov(0,2) << ",";
-    output_file << gps_cov(1,0) << "," << gps_cov(1,1) << "," << gps_cov(1,2) << ",";
-    output_file << gps_cov(2,0) << "," << gps_cov(2,1) << "," << gps_cov(2,2) << ",";
-    output_file << magnetic_cov(0,0) << "," << magnetic_cov(0,1) << ",";
-    output_file << magnetic_cov(1,0) << "," << magnetic_cov(1,1) << ",";
-    output_file << baro_var << "," << sonar_var << ",";
+    output_file << "********************IMU********************"<<std::endl;
+    output_file << "IMU mean (x,y,z),"<<std::endl;
+    output_file << imu_mean(0) << ", " << imu_mean(1) << ", " << imu_mean(2) << std::endl;
+    output_file << "IMU Covariance(x,y,z,a)"<<std::endl;
+    output_file << imu_cov(0,0) << ", " << imu_cov(0,1) << ", " << imu_cov(0,2) << ", " << imu_cov(0,3) << std::endl;
+    output_file << imu_cov(1,0) << ", " << imu_cov(1,1) << ", " << imu_cov(1,2) << ", " << imu_cov(1,3) << std::endl;
+    output_file << imu_cov(2,0) << ", " << imu_cov(2,1) << ", " << imu_cov(2,2) << ", " << imu_cov(2,3) << std::endl;
+    output_file << imu_cov(3,0) << ", " << imu_cov(3,1) << ", " << imu_cov(3,2) << ", " << imu_cov(3,3) << std::endl;
+    output_file << "********************GPS********************"<<std::endl;
+    output_file << "GPS mean (x,y,z),"<<std::endl;
+    output_file << gps_mean(0) << ", " << gps_mean(1) << ", " << gps_mean(2) << std::endl;
+    output_file << "GPS Covariance(x,y,z)"<<std::endl;
+    output_file << gps_cov(0,0) << ", " << gps_cov(0,1) << ", " << gps_cov(0,2) << std::endl;
+    output_file << gps_cov(1,0) << ", " << gps_cov(1,1) << ", " << gps_cov(1,2) << std::endl;
+    output_file << gps_cov(2,0) << ", " << gps_cov(2,1) << ", " << gps_cov(2,2) << std::endl;
+    output_file << "*****************Barometer*****************"<<std::endl;
+    output_file << "Barometer mean (x,y,z),"<<std::endl;
+    output_file << baro_mean << std::endl;
+    output_file << "Barometer Variance"<<std::endl;
+    output_file << baro_var << std::endl;
+    output_file << "Barometer bias and variance"<<std::endl;
     output_file << baro_bias << "," << baro_bias_var << "\n";
+    output_file << "*******************Sonar*******************"<<std::endl;
+    output_file <<"Sonar mean"<<std::endl;
+    output_file << sonar_mean << std::endl;
+    output_file <<"Sonar Variance"<<std::endl;
+    output_file << sonar_var << std::endl;
+    output_file << "***************Magnetometer****************"<<std::endl;
+    output_file << "Magnetometer mean (x,y),"<<std::endl;
+    output_file << magnetic_mean(0) << ", " << magnetic_mean(1) << std::endl;
+    output_file << "Magnetometer Covariance(x,y)"<<std::endl;
+    output_file << magnetic_cov(0,0) << ", " << magnetic_cov(0,1) << std::endl;
+    output_file << magnetic_cov(1,0) << ", " << magnetic_cov(1,1) << std::endl;
     output_file.close();
     return;
 }
@@ -162,12 +168,13 @@ void Statistician::check_data_ready(){
 }
 
 void Statistician::gt_vel_callback(const geometry_msgs::msg::TwistStamped::SharedPtr msg){
-    static double prev_time = 0.0;
+    static double prev_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     static double delta_T = 0.0;
     static uint64_t sample_count = 0;
     static Eigen::Matrix<double, 3, 1> prev_data {msg->twist.linear.x,
                                                     msg->twist.linear.y,
                                                     msg->twist.linear.z};
+
 
     if(gt_vel_data_ready){
         return;
@@ -175,12 +182,15 @@ void Statistician::gt_vel_callback(const geometry_msgs::msg::TwistStamped::Share
     double current_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     auto data = msg->twist;
     delta_T += current_time - prev_time;
-    if(delta_T < 1/params_.sample_frequency){
-        prev_time = current_time;
-        prev_data(0) = data.linear.x;
-        prev_data(1) = data.linear.y;
-        prev_data(2) = data.linear.z;
-        return;
+    while(delta_T >= 1/params_.sample_frequency && sample_count < params_.num_samples){
+        delta_T -= 1/params_.sample_frequency;
+        gt_vel_data(0,sample_count) = interpolate(prev_data(0),
+            data.linear.x, prev_time, current_time, current_time-delta_T);
+        gt_vel_data(1,sample_count) = interpolate(prev_data(1),
+            data.linear.y, prev_time, current_time, current_time-delta_T);
+        gt_vel_data(2,sample_count) = interpolate(prev_data(2),
+            data.linear.z, prev_time, current_time, current_time-delta_T);
+        sample_count++;
     }
     if(sample_count >= params_.num_samples){
         // Save the data to a file
@@ -196,19 +206,15 @@ void Statistician::gt_vel_callback(const geometry_msgs::msg::TwistStamped::Share
         check_data_ready();
         return;
     }
-    delta_T -= 1/params_.sample_frequency;
-    sample_count++;
-    gt_vel_data(0,sample_count) = interpolate(prev_data(0),
-        data.linear.x, prev_time, current_time, current_time-delta_T);
-    gt_vel_data(1,sample_count) = interpolate(prev_data(1),
-        data.linear.y, prev_time, current_time, current_time-delta_T);
-    gt_vel_data(2,sample_count) = interpolate(prev_data(2),
-        data.linear.z, prev_time, current_time, current_time-delta_T);
+    prev_time = current_time;
+    prev_data(0) = data.linear.x;
+    prev_data(1) = data.linear.y;
+    prev_data(2) = data.linear.z;
     return;
 }
     
 void Statistician::gt_pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg){
-    static double prev_time = 0.0;
+    static double prev_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     static double delta_T = 0.0;
     static uint64_t sample_count = 0;
     static Eigen::Matrix<double, 3, 1> prev_data{msg->pose.position.x,
@@ -220,12 +226,15 @@ void Statistician::gt_pose_callback(const geometry_msgs::msg::PoseStamped::Share
     double current_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     auto data = msg->pose.position;
     delta_T += current_time - prev_time;
-    if(delta_T < 1/params_.sample_frequency){
-        prev_time = current_time;
-        prev_data(0) = data.x;
-        prev_data(1) = data.y;
-        prev_data(2) = data.z;
-        return;
+    while(delta_T >= 1/params_.sample_frequency && sample_count < params_.num_samples){
+        delta_T -= 1/params_.sample_frequency;
+        gt_pose_data(0,sample_count) = interpolate(prev_data(0),
+            data.x, prev_time, current_time, current_time-delta_T);
+        gt_pose_data(1,sample_count) = interpolate(prev_data(1),
+            data.y, prev_time, current_time, current_time-delta_T);
+        gt_pose_data(2,sample_count) = interpolate(prev_data(2),
+            data.z, prev_time, current_time, current_time-delta_T);
+        sample_count++;
     }
     if(sample_count >= params_.num_samples){
         // Save the data to a file
@@ -241,31 +250,29 @@ void Statistician::gt_pose_callback(const geometry_msgs::msg::PoseStamped::Share
         check_data_ready();
         return;
     }
-    delta_T -= 1/params_.sample_frequency;
-    sample_count++;
-    gt_pose_data(0,sample_count) = interpolate(prev_data(0),
-        data.x, prev_time, current_time, current_time-delta_T);
-    gt_pose_data(1,sample_count) = interpolate(prev_data(1),
-        data.y, prev_time, current_time, current_time-delta_T);
-    gt_pose_data(2,sample_count) = interpolate(prev_data(2),
-        data.z, prev_time, current_time, current_time-delta_T);
+    prev_time = current_time;
+    prev_data(0) = data.x;
+    prev_data(1) = data.y;
+    prev_data(2) = data.z;
     return;
 }
 void Statistician::baro_callback(const geometry_msgs::msg::PointStamped::SharedPtr msg){
-    static double prev_time = 0.0;
+    static double prev_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     static double delta_T = 0.0;
     static uint64_t sample_count = 0;
     static double prev_data = msg->point.z;
+
     if(baro_data_ready){
         return;
     }
     double current_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     auto data = msg->point.z;
     delta_T += current_time - prev_time;
-    if(delta_T < 1/params_.sample_frequency){
-        prev_time = current_time;
-        prev_data = data;
-        return;
+    while(delta_T >= 1/params_.sample_frequency && sample_count < params_.num_samples){
+        delta_T -= 1/params_.sample_frequency;
+        baro_data(sample_count) = interpolate(prev_data,
+            data, prev_time, current_time, current_time-delta_T);
+        sample_count++;
     }
     if(sample_count >= params_.num_samples){
         // Save the data to a file
@@ -281,14 +288,12 @@ void Statistician::baro_callback(const geometry_msgs::msg::PointStamped::SharedP
         check_data_ready();
         return;
     }
-    delta_T -= 1/params_.sample_frequency;
-    sample_count++;
-    baro_data(sample_count) = interpolate(prev_data,
-        data, prev_time, current_time, current_time-delta_T);
+    prev_time = current_time;
+    prev_data = data;
     return;
 }
 void Statistician::magnetic_callback(const geometry_msgs::msg::Vector3Stamped::SharedPtr msg){
-    static double prev_time = 0.0;
+    static double prev_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     static double delta_T = 0.0;
     static uint64_t sample_count = 0;
     static Eigen::Matrix<double, 2, 1> prev_data{msg->vector.x,
@@ -299,11 +304,13 @@ void Statistician::magnetic_callback(const geometry_msgs::msg::Vector3Stamped::S
     double current_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     auto data = msg->vector;
     delta_T += current_time - prev_time;
-    if(delta_T < 1/params_.sample_frequency){
-        prev_time = current_time;
-        prev_data(0) = data.x;
-        prev_data(1) = data.y;
-        return;
+    while(delta_T >= 1/params_.sample_frequency && sample_count < params_.num_samples){
+        delta_T -= 1/params_.sample_frequency;
+        magnetic_data(0,sample_count) = interpolate(prev_data(0),
+            data.x, prev_time, current_time, current_time-delta_T);
+        magnetic_data(1,sample_count) = interpolate(prev_data(1),
+            data.y, prev_time, current_time, current_time-delta_T);
+        sample_count++;
     }
     if(sample_count >= params_.num_samples){
         // Save the data to a file
@@ -319,33 +326,38 @@ void Statistician::magnetic_callback(const geometry_msgs::msg::Vector3Stamped::S
         check_data_ready();
         return;
     }
-    delta_T -= 1/params_.sample_frequency;
-    sample_count++;
-    magnetic_data(0,sample_count) = interpolate(prev_data(0),
-        data.x, prev_time, current_time, current_time-delta_T);
-    magnetic_data(1,sample_count) = interpolate(prev_data(1),
-        data.y, prev_time, current_time, current_time-delta_T);
+    prev_time = current_time;
+    prev_data(0) = data.x;
+    prev_data(1) = data.y;
     return;
 }
 void Statistician::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg){
-    static double prev_time = 0.0;
+    static double prev_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     static double delta_T = 0.0;
     static uint64_t sample_count = 0;
-    static Eigen::Matrix<double, 3, 1> prev_data{msg->linear_acceleration.x,
+    static Eigen::Matrix<double, 4, 1> prev_data{msg->linear_acceleration.x,
                                                  msg->linear_acceleration.y,
-                                                 msg->linear_acceleration.z};
+                                                 msg->linear_acceleration.z,
+                                                 msg->angular_velocity.z};
     if(imu_data_ready){
         return;
     }
     double current_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
-    auto data = msg->linear_acceleration;
+    auto linear = msg->linear_acceleration;
+    auto angular = msg->angular_velocity;
     delta_T += current_time - prev_time;
-    if(delta_T < 1/params_.sample_frequency){
-        prev_time = current_time;
-        prev_data(0) = data.x;
-        prev_data(1) = data.y;
-        prev_data(2) = data.z;
-        return;
+    while(delta_T >= 1/params_.sample_frequency && sample_count < params_.num_samples){
+        delta_T -= 1/params_.sample_frequency;
+        imu_data(0,sample_count) = interpolate(prev_data(0),
+            linear.x, prev_time, current_time, current_time-delta_T);
+        imu_data(1,sample_count) = interpolate(prev_data(1),
+            linear.y, prev_time, current_time, current_time-delta_T);
+        imu_data(2,sample_count) = interpolate(prev_data(2),
+            linear.z, prev_time, current_time, current_time-delta_T);
+        imu_data(3,sample_count) = interpolate(prev_data(3),
+            angular.z, prev_time, current_time, current_time-delta_T);
+        
+        sample_count++;
     }
     if(sample_count >= params_.num_samples){
         // Save the data to a file
@@ -361,18 +373,15 @@ void Statistician::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg){
         check_data_ready();
         return;
     }
-    delta_T -= 1/params_.sample_frequency;
-    sample_count++;
-    imu_data(0,sample_count) = interpolate(prev_data(0),
-        data.x, prev_time, current_time, current_time-delta_T);
-    imu_data(1,sample_count) = interpolate(prev_data(1),
-        data.y, prev_time, current_time, current_time-delta_T);
-    imu_data(2,sample_count) = interpolate(prev_data(2),
-        data.z, prev_time, current_time, current_time-delta_T);
+    prev_time = current_time;
+    prev_data(0) = linear.x;
+    prev_data(1) = linear.y;
+    prev_data(2) = linear.z;
+    prev_data(3) = angular.z;
     return;
 }
 void Statistician::gps_callback(const sensor_msgs::msg::NavSatFix::SharedPtr msg){
-    static double prev_time = 0.0;
+    static double prev_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     static double delta_T = 0.0;
     static uint64_t sample_count = 0;
     static const Eigen::Matrix3d R_mn {
@@ -399,7 +408,6 @@ void Statistician::gps_callback(const sensor_msgs::msg::NavSatFix::SharedPtr msg
         initialized_ECEF = true;
         return;
     }
-
     Eigen::Vector3d ECEF = getECEF(sin_lat, cos_lat, sin_lon, cos_lon, alt);
     // Rotation matrix from ECEF to NED
     const Eigen::Matrix3d R_ne{
@@ -413,10 +421,15 @@ void Statistician::gps_callback(const sensor_msgs::msg::NavSatFix::SharedPtr msg
     static Eigen::Matrix<double, 3, 1> prev_data = ned;
     double current_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     delta_T += current_time - prev_time;
-    if(delta_T < 1/params_.sample_frequency){
-        prev_time = current_time;
-        prev_data = ned;
-        return;
+    while(delta_T >= 1/params_.sample_frequency && sample_count < params_.num_samples){
+        delta_T -= 1/params_.sample_frequency;
+        gps_data(0,sample_count) = interpolate(prev_data(0),
+            ned(0), prev_time, current_time, current_time-delta_T);
+        gps_data(1,sample_count) = interpolate(prev_data(1),
+            ned(1), prev_time, current_time, current_time-delta_T);
+        gps_data(2,sample_count) = interpolate(prev_data(2),
+            ned(2), prev_time, current_time, current_time-delta_T);
+        sample_count++;
     }
     if(sample_count >= params_.num_samples){
         // Save the data to a file
@@ -432,31 +445,27 @@ void Statistician::gps_callback(const sensor_msgs::msg::NavSatFix::SharedPtr msg
         check_data_ready();
         return;
     }
-    delta_T -= 1/params_.sample_frequency;
-    sample_count++;
-    gps_data(0,sample_count) = interpolate(prev_data(0),
-        ned(0), prev_time, current_time, current_time-delta_T);
-    gps_data(1,sample_count) = interpolate(prev_data(1),
-        ned(1), prev_time, current_time, current_time-delta_T);
-    gps_data(2,sample_count) = interpolate(prev_data(2),
-        ned(2), prev_time, current_time, current_time-delta_T);
+    prev_time = current_time;
+    prev_data = ned;
     return;
 }
 void Statistician::sonar_callback(const sensor_msgs::msg::Range::SharedPtr msg){
-    static double prev_time = 0.0;
+    static double prev_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     static double delta_T = 0.0;
     static uint64_t sample_count = 0;
     static double prev_data = msg->range;
+
     if(sonar_data_ready){
         return;
     }
     double current_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     auto data = msg->range;
     delta_T += current_time - prev_time;
-    if(delta_T < 1/params_.sample_frequency){
-        prev_time = current_time;
-        prev_data = data;
-        return;
+    while(delta_T >= 1/params_.sample_frequency && sample_count < params_.num_samples){
+        delta_T -= 1/params_.sample_frequency;
+        sonar_data(sample_count) = interpolate(prev_data,
+            data, prev_time, current_time, current_time-delta_T);
+        sample_count++;
     }
     if(sample_count >= params_.num_samples){
         // Save the data to a file
@@ -472,10 +481,8 @@ void Statistician::sonar_callback(const sensor_msgs::msg::Range::SharedPtr msg){
         check_data_ready();
         return;
     }
-    delta_T -= 1/params_.sample_frequency;
-    sample_count++;
-    sonar_data(sample_count) = interpolate(prev_data,
-        data, prev_time, current_time, current_time-delta_T);
+    prev_time = current_time;
+    prev_data = data;
     return;
 }
 
@@ -484,6 +491,7 @@ int main(int argc, char ** argv)
     (void) argc;
     (void) argv;
     rclcpp::init(argc, argv);
+    RCLCPP_INFO_STREAM(rclcpp::get_logger("rclcpp"), "Starting statistician node.");
     auto node = std::make_shared<Statistician>("statistician");
     rclcpp::spin(node);
     return 0;

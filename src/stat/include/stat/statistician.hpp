@@ -80,7 +80,7 @@ private:
     Eigen::Matrix<double, 3, Eigen::Dynamic> gt_vel_data;
     Eigen::Matrix<double, 1, Eigen::Dynamic> baro_data;
     Eigen::Matrix<double, 2, Eigen::Dynamic> magnetic_data;
-    Eigen::Matrix<double, 3, Eigen::Dynamic> imu_data;
+    Eigen::Matrix<double, 4, Eigen::Dynamic> imu_data;
     Eigen::Matrix<double, 3, Eigen::Dynamic> gps_data;
     Eigen::Matrix<double, 1, Eigen::Dynamic> sonar_data;
 
