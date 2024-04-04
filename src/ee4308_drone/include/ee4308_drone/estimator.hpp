@@ -51,7 +51,7 @@ namespace ee4308::drone
         double var_sonar = 0.1;
         double var_magnet_x = 0.1;
         double var_magnet_y = 0.1;
-        double var_process_baro_bias = 0.5
+        double var_process_baro_bias = 0.5;
         double rad_polar = 6356752.3;
         double rad_equator = 6378137;
         double keep_old_sonar = 0.5;
