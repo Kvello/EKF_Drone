@@ -3,11 +3,15 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <iostream>
+#include <fstream>
 
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/odometry.hpp"             // odom_drone
-#include "geometry_msgs/msg/twist.hpp"           // gt_vel, cmd_vel
-#include "geometry_msgs/msg/pose.hpp"            // gt_pose
+#include "geometry_msgs/msg/twist_stamped.hpp"           // gt_vel
+#include "geometry_msgs/msg/twist.hpp"           // cmd_vel
+#include "geometry_msgs/msg/pose_stamped.hpp"    // gt_pose
+#include "geometry_msgs/msg/pose.hpp"            
 #include "geometry_msgs/msg/point_stamped.hpp"   // altitude
 #include "geometry_msgs/msg/vector3_stamped.hpp" // magnetic
 #include "sensor_msgs/msg/imu.hpp"
@@ -66,8 +70,8 @@ namespace ee4308::drone
         rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr sub_baro_;
         rclcpp::Subscription<geometry_msgs::msg::Vector3Stamped>::SharedPtr sub_magnetic_;
         rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu_;
-        rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr sub_gt_pose_;
-        rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr sub_gt_vel_;
+        rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_gt_pose_;
+        rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr sub_gt_vel_;
         rclcpp::TimerBase::SharedPtr looper_;
 
         Eigen::Vector2d Xx_ = {0, 0}, Xy_ = {0, 0}, Xa_ = {0, 0};
@@ -170,10 +174,10 @@ namespace ee4308::drone
             }
             else
             { // if using ground truth.
-                sub_gt_pose_ = create_subscription<geometry_msgs::msg::Pose>(
+                sub_gt_pose_ = create_subscription<geometry_msgs::msg::PoseStamped>(
                     params_.topics.gt_pose, 10,
                     std::bind(&ROSNodeEstimator::subCbGtPose, this, std::placeholders::_1));
-                sub_gt_vel_ = create_subscription<geometry_msgs::msg::Twist>(
+                sub_gt_vel_ = create_subscription<geometry_msgs::msg::TwistStamped>(
                     params_.topics.gt_vel, 10,
                     std::bind(&ROSNodeEstimator::subCbGtVel, this, std::placeholders::_1));
             }
@@ -190,20 +194,22 @@ namespace ee4308::drone
         }
 
         // ================================ SUBSCRIBER CALLBACKS ========================================
-        void subCbGtPose(const geometry_msgs::msg::Pose &msg)
+        void subCbGtPose(const geometry_msgs::msg::PoseStamped &msg)
         {
-            Xx_[0] = msg.position.x;
-            Xy_[0] = msg.position.y;
-            Xz_[0] = msg.position.z;
-            Xa_[0] = quaternionToYaw(msg.orientation);
+            geometry_msgs::msg::Pose pose = msg.pose;
+            Xx_[0] = pose.position.x;
+            Xy_[0] = pose.position.y;
+            Xz_[0] = pose.position.z;
+            Xa_[0] = quaternionToYaw(pose.orientation);
         }
 
-        void subCbGtVel(const geometry_msgs::msg::Twist &msg)
+        void subCbGtVel(const geometry_msgs::msg::TwistStamped &msg)
         {
-            Xx_[1] = msg.linear.x;
-            Xy_[1] = msg.linear.y;
-            Xz_[1] = msg.linear.z;
-            Xa_[1] = msg.angular.z;
+            geometry_msgs::msg::Twist twist = msg.twist;
+            Xx_[1] = twist.linear.x;
+            Xy_[1] = twist.linear.y;
+            Xz_[1] = twist.linear.z;
+            Xa_[1] = twist.angular.z;
         }
 
         // ================================  Main Loop / Odom Publisher ========================================
