@@ -3,11 +3,15 @@
 #include <algorithm>
 #include <cmath>
 #include <vector>
+#include <iostream>
+#include <fstream>
 
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/odometry.hpp"             // odom_drone
-#include "geometry_msgs/msg/twist.hpp"           // gt_vel, cmd_vel
-#include "geometry_msgs/msg/pose.hpp"            // gt_pose
+#include "geometry_msgs/msg/twist_stamped.hpp"           // gt_vel
+#include "geometry_msgs/msg/twist.hpp"           // cmd_vel
+#include "geometry_msgs/msg/pose_stamped.hpp"    // gt_pose
+#include "geometry_msgs/msg/pose.hpp"            
 #include "geometry_msgs/msg/point_stamped.hpp"   // altitude
 #include "geometry_msgs/msg/vector3_stamped.hpp" // magnetic
 #include "sensor_msgs/msg/imu.hpp"
@@ -66,8 +70,8 @@ namespace ee4308::drone
         rclcpp::Subscription<geometry_msgs::msg::PointStamped>::SharedPtr sub_baro_;
         rclcpp::Subscription<geometry_msgs::msg::Vector3Stamped>::SharedPtr sub_magnetic_;
         rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu_;
-        rclcpp::Subscription<geometry_msgs::msg::Pose>::SharedPtr sub_gt_pose_;
-        rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr sub_gt_vel_;
+        rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr sub_gt_pose_;
+        rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr sub_gt_vel_;
         rclcpp::TimerBase::SharedPtr looper_;
 
         Eigen::Vector2d Xx_ = {0, 0}, Xy_ = {0, 0}, Xa_ = {0, 0};
@@ -170,10 +174,10 @@ namespace ee4308::drone
             }
             else
             { // if using ground truth.
-                sub_gt_pose_ = create_subscription<geometry_msgs::msg::Pose>(
+                sub_gt_pose_ = create_subscription<geometry_msgs::msg::PoseStamped>(
                     params_.topics.gt_pose, 10,
                     std::bind(&ROSNodeEstimator::subCbGtPose, this, std::placeholders::_1));
-                sub_gt_vel_ = create_subscription<geometry_msgs::msg::Twist>(
+                sub_gt_vel_ = create_subscription<geometry_msgs::msg::TwistStamped>(
                     params_.topics.gt_vel, 10,
                     std::bind(&ROSNodeEstimator::subCbGtVel, this, std::placeholders::_1));
             }
@@ -190,20 +194,22 @@ namespace ee4308::drone
         }
 
         // ================================ SUBSCRIBER CALLBACKS ========================================
-        void subCbGtPose(const geometry_msgs::msg::Pose &msg)
+        void subCbGtPose(const geometry_msgs::msg::PoseStamped &msg)
         {
-            Xx_[0] = msg.position.x;
-            Xy_[0] = msg.position.y;
-            Xz_[0] = msg.position.z;
-            Xa_[0] = quaternionToYaw(msg.orientation);
+            geometry_msgs::msg::Pose pose = msg.pose;
+            Xx_[0] = pose.position.x;
+            Xy_[0] = pose.position.y;
+            Xz_[0] = pose.position.z;
+            Xa_[0] = quaternionToYaw(pose.orientation);
         }
 
-        void subCbGtVel(const geometry_msgs::msg::Twist &msg)
+        void subCbGtVel(const geometry_msgs::msg::TwistStamped &msg)
         {
-            Xx_[1] = msg.linear.x;
-            Xy_[1] = msg.linear.y;
-            Xz_[1] = msg.linear.z;
-            Xa_[1] = msg.angular.z;
+            geometry_msgs::msg::Twist twist = msg.twist;
+            Xx_[1] = twist.linear.x;
+            Xy_[1] = twist.linear.y;
+            Xz_[1] = twist.linear.z;
+            Xa_[1] = twist.angular.z;
         }
 
         // ================================  Main Loop / Odom Publisher ========================================
@@ -417,12 +423,14 @@ namespace ee4308::drone
             // Ymagnet_ = ...
             // Correct yaw
             // params_.var_magnet
-            Ymagnet_ = atan2(msg.vector.y, msg.vector.x);
+            // Magnetometer measurement is in a different frame with y'=-y
+            Ymagnet_ = atan2(-msg.vector.y, msg.vector.x);
             const static Eigen::Matrix<double,1,2> H_magnet{1,0};
+            // R_magnet = sqrt((pow(Xa_(0)*params_.var_magnet_y,2) + pow(Xa_(1)*params_.var_magnet_x,2)))/(pow(Xa_(0),2) + pow(Xa_(1),2));
             const static double R_magnet = params_.var_magnet;
             const Eigen::Vector2d K_a = Pa_*H_magnet.transpose()
                     /(H_magnet*Pa_*H_magnet.transpose() + R_magnet);
-            Xa_ = Xa_ + K_a*(Ymagnet_ - H_magnet*Xa_);
+            Xa_ += K_a*(limit_angle(Ymagnet_ - H_magnet*Xa_));
             Pa_ -= K_a*H_magnet*Pa_;
             // --- EOFIXME ---
         }
@@ -437,14 +445,16 @@ namespace ee4308::drone
             
             // --- FIXME ---
             Ybaro_ = msg.point.z;
-            double h_X_zk = Xz_(0);
-            // Create H vector [1 0]
-            Eigen::Matrix<double,1,3> H_bar{1,0,0};
+            // Create H vector [1 0, 1]
+            Eigen::Matrix<double,1,3> H_bar{1,0,1};
             double R = params_.var_baro;
             // Correct z
+
             const Eigen::Vector3d K_z = Pz_*H_bar.transpose()/(H_bar*Pz_*H_bar.transpose() + R);
-            Xz_ = Xz_ + K_z*(Ybaro_ - h_X_zk - Xz_[2]);
-            Pz_ = Pz_ - K_z*H_bar*Pz_;
+            Xz_ += K_z*(Ybaro_ - H_bar*Xz_);
+            Pz_ -= K_z*H_bar*Pz_;
+            std::cout<<"Barometer bias: "<<Xz_(2)<<std::endl;
+            std::cout<<"Covariance matrix for z after baro update: "<<Pz_<<std::endl;
             // Correct z
             // params_.var_baro
             // --- EOFIXME ---
@@ -506,9 +516,11 @@ namespace ee4308::drone
             Eigen::Vector3d Wzk;
             Wzk << 0.5*dt*dt, dt, 0;
 
-            double Qz = params_.var_imu_z;
+            // Processs noise on the bias state enters here
 
-            Xz_ = Fzk*Xz_ + Wzk*params_.var_imu_z;
+            double Qz = params_.var_imu_z;
+            double G = params_.G;
+            Xz_ = Fzk*Xz_ + Wzk*(msg.linear_acceleration.z-G);
             Pz_ = Fzk*Pz_*Fzk.transpose() + Wzk*Wzk.transpose()*Qz;
 
             //std::cout << "Xz_ = " << Xz_ << std::endl;

@@ -311,9 +311,53 @@ namespace ee4308::drone
             // Get a thread-safe copy of the plan. A more efficient way is to use a lock guard here and use the plan directly without copying.
             std::vector<geometry_msgs::msg::PoseStamped> plan = getPlan();
 
+            // Print all points in the plan
+            // for (long unsigned int i = 0; i < plan.size(); i++)
+            // {
+            //     std::cout << "point " << i << ": " << plan[i].pose.position.x << ", " << plan[i].pose.position.y << ", " << plan[i].pose.position.z << std::endl;
+            // }
+
+            //lookahead_.point = plan.back().pose.position;
+            //std::cout << "lookahead point: " << lookahead_.point.x << ", " << lookahead_.point.y << ", " << lookahead_.point.z << std::endl;
+            //return;
+
             // --- FIXME ---
             // params_.lookahead_distance
-            lookahead_.point = plan.back().pose.position;
+
+            // Find the closest point on the path to the drone
+            double min_dist = 1e9;
+            int min_idx = -1;
+            for (long unsigned int i = 0; i < plan.size(); i++)
+            {
+                double dx = plan[i].pose.position.x - drone_pose.position.x;
+                double dy = plan[i].pose.position.y - drone_pose.position.y;
+                double dz = plan[i].pose.position.z - drone_pose.position.z;
+                double dist = sqrt(dx * dx + dy * dy + dz * dz);
+                if (dist < min_dist)
+                {
+                    min_dist = dist;
+                    min_idx = i;
+                }
+            }
+            // Closest point on the path is plan[min_idx]
+
+            // Find the lookahead point
+            long unsigned int lookahead_idx = min_idx;
+            double lookahead_dist = 0;
+            while (lookahead_dist < params_.lookahead_distance && lookahead_idx < plan.size() - 1)
+            {
+                double dx = plan[lookahead_idx + 1].pose.position.x - plan[lookahead_idx].pose.position.x;
+                double dy = plan[lookahead_idx + 1].pose.position.y - plan[lookahead_idx].pose.position.y;
+                double dz = plan[lookahead_idx + 1].pose.position.z - plan[lookahead_idx].pose.position.z;
+                double dist = sqrt(dx * dx + dy * dy + dz * dz);
+                lookahead_dist += dist;
+                lookahead_idx++;
+            }
+
+            lookahead_.point = plan[lookahead_idx].pose.position;
+
+            // Print lookahead_.point = plan[lookahead_idx].pose.position
+            //std::cout << "lookahead point: " << lookahead_.point.x << ", " << lookahead_.point.y << ", " << lookahead_.point.z << std::endl;
             // --- EOFIXME ---
         }
 
@@ -325,6 +369,7 @@ namespace ee4308::drone
             double dy = lookahead_.point.y - drone_pose.position.y;
             double dz = lookahead_.point.z - drone_pose.position.z;
             double drone_yaw = quaternionToYaw(drone_pose.orientation);
+            std::cout << drone_yaw << std::endl;
 
             // --- FIXME ---
             // params_.kp_horz, params.kp_vert
@@ -332,11 +377,26 @@ namespace ee4308::drone
             // params_.max_vert_vel, params_.max_vert_acc
             // cmd_vel_
             // params_.yaw_vel
-            // --- Remove the following code after fixing ---
-            cmd_vel_.linear.x = 0.5 * dx/ sqrt(dx*dx +dy*dy);
-            cmd_vel_.linear.y = 0.5 * dy/ sqrt(dx*dx + dy*dy);
-            cmd_vel_.linear.z = 0.25 * dz;
-            cmd_vel_.angular.z = 0;
+            Eigen::Matrix2d R;
+            R << cos(-drone_yaw), -sin(-drone_yaw), sin(-drone_yaw), cos(-drone_yaw);
+            const Eigen::Vector2d e {dx, dy};
+            const Eigen ::Vector2d e_local = R * e;
+            const double prev_v_h = Eigen::Vector2d{cmd_vel_.linear.x, cmd_vel_.linear.y}.norm();
+            const double prev_v_z = cmd_vel_.linear.z;
+            const double v_h_desired = params_.kp_horz * e_local.norm();
+            const double v_z_desired = params_.kp_vert * dz;
+            double acc_h = (v_h_desired - prev_v_h) / elapsed_;
+            acc_h = acc_h > params_.max_horz_acc ? params_.max_horz_acc : acc_h;
+            acc_h = acc_h < -params_.max_horz_acc ? -params_.max_horz_acc : acc_h;
+            double acc_z = (v_z_desired - prev_v_z) / elapsed_;
+            acc_z = acc_z > params_.max_vert_acc ? params_.max_vert_acc : acc_z;
+            acc_z = acc_z < -params_.max_vert_acc ? -params_.max_vert_acc : acc_z;
+            const double v_h = prev_v_h + acc_h * elapsed_;
+            const double v_z = prev_v_z + acc_z * elapsed_;
+            cmd_vel_.linear.x = v_h * e_local(0) / e_local.norm();
+            cmd_vel_.linear.y = v_h * e_local(1) / e_local.norm();
+            cmd_vel_.linear.z = v_z;
+            cmd_vel_.angular.z = params_.yaw_vel;
             // --- EOFIXME ---
         }
     };
