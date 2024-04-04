@@ -423,9 +423,10 @@ namespace ee4308::drone
             // Ymagnet_ = ...
             // Correct yaw
             // params_.var_magnet
-            // Magnetometer measurement is in a different frame with y'=-y            Ymagnet_ = atan2(-msg.vector.y, msg.vector.x);
+            // Magnetometer measurement is in a different frame with y'=-y
             Ymagnet_ = atan2(-msg.vector.y, msg.vector.x);
             const static Eigen::Matrix<double,1,2> H_magnet{1,0};
+            // R_magnet = sqrt((pow(Xa_(0)*params_.var_magnet_y,2) + pow(Xa_(1)*params_.var_magnet_x,2)))/(pow(Xa_(0),2) + pow(Xa_(1),2));
             const static double R_magnet = params_.var_magnet;
             const Eigen::Vector2d K_a = Pa_*H_magnet.transpose()
                     /(H_magnet*Pa_*H_magnet.transpose() + R_magnet);
