@@ -51,6 +51,7 @@ namespace ee4308::drone
         double var_sonar = 0.1;
         double var_magnet_x = 0.1;
         double var_magnet_y = 0.1;
+        double var_process_baro_bias = 0.5
         double rad_polar = 6356752.3;
         double rad_equator = 6378137;
         double keep_old_sonar = 0.5;
@@ -145,6 +146,7 @@ namespace ee4308::drone
             initParam(this, "var_baro", params_.var_baro);
             initParam(this, "var_magnet_x", params_.var_magnet_x);
             initParam(this, "var_magnet_y", params_.var_magnet_y);
+            initParam(this, "var_process_baro_bias", params_.var_process_baro_bias);
             initParam(this, "var_sonar", params_.var_sonar);
             initParam(this, "rad_polar", params_.rad_polar);
             initParam(this, "rad_equator", params_.rad_equator);
@@ -458,6 +460,9 @@ namespace ee4308::drone
             const Eigen::Vector3d K_z = Pz_*H_bar.transpose()/(H_bar*Pz_*H_bar.transpose() + R);
             Xz_ += K_z*(Ybaro_ - H_bar*Xz_);
             Pz_ -= K_z*H_bar*Pz_;
+            // Process noise on the bias state enters here
+            // Bias is completely independently estimated in this function
+            Pz_(2,2) += params_.var_process_baro_bias;
             std::cout<<"Barometer bias: "<<Xz_(2)<<std::endl;
             std::cout<<"Covariance matrix for z after baro update: "<<Pz_<<std::endl;
             // Correct z
