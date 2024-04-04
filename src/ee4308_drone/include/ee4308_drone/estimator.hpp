@@ -143,8 +143,8 @@ namespace ee4308::drone
             initParam(this, "var_gps_y", params_.var_gps_y);
             initParam(this, "var_gps_z", params_.var_gps_z);
             initParam(this, "var_baro", params_.var_baro);
-            initParam(this, "var_magnetic_x", params_.var_magnetic_x);
-            initParam(this, "var_magnetic_y", params_.var_magnetic_y);
+            initParam(this, "var_magnet_x", params_.var_magnet_x);
+            initParam(this, "var_magnet_y", params_.var_magnet_y);
             initParam(this, "var_sonar", params_.var_sonar);
             initParam(this, "rad_polar", params_.rad_polar);
             initParam(this, "rad_equator", params_.rad_equator);
