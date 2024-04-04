@@ -14,6 +14,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(eigen3_cmake_module REQUIRED)
 find_package(Eigen3)
+find_package(ee4308_lib)
 
 set(DEPENDENCIES
   "rclcpp"
@@ -22,6 +23,7 @@ set(DEPENDENCIES
   "geometry_msgs"
   "nav_msgs"
   "Eigen3"
+  "ee4308_lib"
 )
 
 add_executable(stat src/stat.cpp)

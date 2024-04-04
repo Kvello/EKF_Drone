@@ -16,6 +16,7 @@
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>nav_msgs</depend>
+  <depend>ee4308_lib</depend>
 
   <build_depend>eigen</build_depend>
 
