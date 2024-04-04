@@ -52,6 +52,7 @@ namespace ee4308::drone
         double var_magnet_x = 0.1;
         double var_magnet_y = 0.1;
         double var_process_baro_bias = 0.5;
+        double var_process_sonar_bias = 0.5;
         double rad_polar = 6356752.3;
         double rad_equator = 6378137;
         double keep_old_sonar = 0.5;
@@ -77,11 +78,11 @@ namespace ee4308::drone
         rclcpp::TimerBase::SharedPtr looper_;
 
         Eigen::Vector2d Xx_ = {0, 0}, Xy_ = {0, 0}, Xa_ = {0, 0};
-        Eigen::Vector3d Xz_ = {0, 0, 0};
+        Eigen::Vector4d Xz_ = {0, 0, 0, 0};
         Eigen::Matrix2d Px_ = Eigen::Matrix2d::Constant(1e3),
                         Py_ = Eigen::Matrix2d::Constant(1e3),
                         Pa_ = Eigen::Matrix2d::Constant(1e3);
-        Eigen::Matrix3d Pz_ = Eigen::Matrix3d::Constant(1e3);
+        Eigen::Matrix4d Pz_ = Eigen::Matrix4d::Constant(1e3);
 
         // Eigen::Vector2d Xx_ = {0, 0}, Xy_ = {0, 0}, Xa_ = {0, 0};
         // Eigen::Vector3d Xz_ = {0, 0, 0};
@@ -147,6 +148,7 @@ namespace ee4308::drone
             initParam(this, "var_magnet_x", params_.var_magnet_x);
             initParam(this, "var_magnet_y", params_.var_magnet_y);
             initParam(this, "var_process_baro_bias", params_.var_process_baro_bias);
+            initParam(this, "var_process_sonar_bias", params_.var_process_baro_bias);
             initParam(this, "var_sonar", params_.var_sonar);
             initParam(this, "rad_polar", params_.rad_polar);
             initParam(this, "rad_equator", params_.rad_equator);
@@ -370,7 +372,7 @@ namespace ee4308::drone
 
             // Run Kalman correction
             const static Eigen::Matrix<double,1,2> H_gps{1,0};
-            const static Eigen::Matrix<double,1,3> H_gps_z{1,0,0};
+            const static Eigen::Matrix<double,1,4> H_gps_z{1,0,0,0};
             const static double R_gps_x = params_.var_gps_x;
             const static double R_gps_y = params_.var_gps_y;
             const static double R_gps_z = params_.var_gps_z;
@@ -378,7 +380,7 @@ namespace ee4308::drone
                     /(H_gps*Px_*H_gps.transpose() + R_gps_x);
             const Eigen::Vector2d K_y = Py_*H_gps.transpose()
                     /(H_gps*Py_*H_gps.transpose() + R_gps_y);
-            const Eigen::Vector3d K_z = Pz_*H_gps_z.transpose()
+            const Eigen::Vector4d K_z = Pz_*H_gps_z.transpose()
                     /(H_gps_z*Pz_*H_gps_z.transpose() + R_gps_z);
             Xx_ = Xx_ + K_x*(Ygps_(0) - H_gps*Xx_);
             Xy_ = Xy_ + K_y*(Ygps_(1) - H_gps*Xy_);
@@ -402,17 +404,18 @@ namespace ee4308::drone
             }
 
             // Apply lowpass filter (exponential forgetting)
-            const double alpha = 0.5;
-            Ysonar_ = alpha * new_Ysonar + (1 - alpha) * Ysonar_;
+            // const double alpha = 0.5;
+            // Ysonar_ = alpha * new_Ysonar + (1 - alpha) * Ysonar_;
+            Ysonar_ = new_Ysonar;
             
-            double h_X_zk = Xz_(0);
             // Create H vector [1 0]
-            Eigen::Matrix<double,1,3> H_sonar{1,0,0};
+            Eigen::Matrix<double,1,4> H_sonar{1,0,0,1};
             double R = params_.var_sonar;
             // Correct z
-            const Eigen::Vector3d K_z = Pz_*H_sonar.transpose()/(H_sonar*Pz_*H_sonar.transpose() + R);
-            Xz_ = Xz_ + K_z*(Ysonar_ - h_X_zk);
+            const Eigen::Vector4d K_z = Pz_*H_sonar.transpose()/(H_sonar*Pz_*H_sonar.transpose() + R);
+            Xz_ = Xz_ + K_z*(Ysonar_ - H_sonar*Xz_);
             Pz_ = Pz_ - K_z*H_sonar*Pz_;
+            Pz_(3,3) += params_.var_process_sonar_bias;
         }
 
         // ================================ Magnetic sub callback / EKF Correction ========================================
@@ -453,11 +456,11 @@ namespace ee4308::drone
             // --- FIXME ---
             Ybaro_ = msg.point.z;
             // Create H vector [1 0, 1]
-            Eigen::Matrix<double,1,3> H_bar{1,0,1};
+            Eigen::Matrix<double,1,4> H_bar{1,0,1,0};
             double R = params_.var_baro;
             // Correct z
 
-            const Eigen::Vector3d K_z = Pz_*H_bar.transpose()/(H_bar*Pz_*H_bar.transpose() + R);
+            const Eigen::Vector4d K_z = Pz_*H_bar.transpose()/(H_bar*Pz_*H_bar.transpose() + R);
             Xz_ += K_z*(Ybaro_ - H_bar*Xz_);
             Pz_ -= K_z*H_bar*Pz_;
             // Process noise on the bias state enters here
@@ -520,11 +523,15 @@ namespace ee4308::drone
             //std::cout << "Xy_ = " << Xy_ << std::endl;
 
             // Predict z
-            Eigen::Matrix3d Fzk;
-            Fzk << 1, dt, 0, 0, 1, 0, 0, 0, 1;
+            Eigen::Matrix4d Fzk{
+                {1, dt, 0, 0},
+                {0, 1, 0, 0},
+                {0, 0, 1, 0},
+                {0, 0, 0, 1}
+            };
 
-            Eigen::Vector3d Wzk;
-            Wzk << 0.5*dt*dt, dt, 0;
+            Eigen::Vector4d Wzk;
+            Wzk << 0.5*dt*dt, dt, 0, 0;
 
             // Processs noise on the bias state enters here
 

@@ -58,8 +58,8 @@ drone:
         gt_vel: "gt_vel"
       frequency: 10.0
       G: 9.8
-      var_imu_x: 0.1
-      var_imu_y: 0.1
+      var_imu_x: 0.5
+      var_imu_y: 0.5
       var_imu_z: 0.4
       var_imu_a: 1e-6
       var_gps_x: 0.05
@@ -70,6 +70,7 @@ drone:
       var_magnet_x: 0.0004
       var_magnet_y: 0.0004
       var_process_baro_bias: 1.
+      var_process_sonar_bias: 1.5
       rad_polar: 6356752.3
       rad_equator: 6378137.0
       keep_old_sonar: 0.5
