@@ -40,3 +40,8 @@ To run the project you can simply use
 ```{bash}
 . run.sh
 ```
+
+## Non-trivial implementation details and justifications:
+
+The system has been extened with a statistics package that calculates the covariances for the measurements. See the relevant readme for more.
+Since the measurements calculate the variance of the x,y vector of the magnetometer measurement, it is necessary to transform the measurements. This means that the variance of the angle measuremements is assumed to depend on the position of the drone. This is more likely due to the highly non-linear transform.
