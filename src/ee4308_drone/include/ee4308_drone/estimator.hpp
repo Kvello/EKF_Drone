@@ -22,6 +22,33 @@
 
 #include "ee4308_lib/core.hpp"
 
+class ANIS_Calculator
+{
+public:
+    ANIS_Calculator(const int size): size_(size)
+    {
+        ANIS_ = 0;
+    }
+
+    void addMeasurement(double inovation, double covariance)
+    {
+        ANIS_ += inovation*inovation/covariance;
+        num_samples_++;
+    }
+    int getNumSamples()
+    {
+        return num_samples_;
+    }
+    double getANIS()
+    {
+        return ANIS_/num_samples_;
+    }
+private:
+    double ANIS_;
+    int num_samples_;
+    const int size_;
+};
+
 #pragma once
 namespace ee4308::drone
 {
@@ -51,11 +78,16 @@ namespace ee4308::drone
         double var_sonar = 0.1;
         double var_magnet_x = 0.1;
         double var_magnet_y = 0.1;
+        double var_process_baro_bias = 0.5;
+        double var_process_sonar_bias = 0.5;
         double rad_polar = 6356752.3;
         double rad_equator = 6378137;
         double keep_old_sonar = 0.5;
         bool verbose = true;
         bool use_gt = false;
+        bool check_consistency = false;
+        int num_samples = 1e2;
+        std::string anis_save_file = "anis.csv";
     };
 
     /**
@@ -76,11 +108,11 @@ namespace ee4308::drone
         rclcpp::TimerBase::SharedPtr looper_;
 
         Eigen::Vector2d Xx_ = {0, 0}, Xy_ = {0, 0}, Xa_ = {0, 0};
-        Eigen::Vector3d Xz_ = {0, 0, 0};
+        Eigen::Vector4d Xz_ = {0, 0, 0, 0};
         Eigen::Matrix2d Px_ = Eigen::Matrix2d::Constant(1e3),
                         Py_ = Eigen::Matrix2d::Constant(1e3),
                         Pa_ = Eigen::Matrix2d::Constant(1e3);
-        Eigen::Matrix3d Pz_ = Eigen::Matrix3d::Constant(1e3);
+        Eigen::Matrix4d Pz_ = Eigen::Matrix4d::Constant(1e3);
 
         // Eigen::Vector2d Xx_ = {0, 0}, Xy_ = {0, 0}, Xa_ = {0, 0};
         // Eigen::Vector3d Xz_ = {0, 0, 0};
@@ -98,6 +130,14 @@ namespace ee4308::drone
         double last_time_ = 0;
         bool initialized_ecef_ = false;
         bool initialized_magnetic_ = false;
+
+        ANIS_Calculator gpsX_anis_{1};
+        ANIS_Calculator gpsY_anis_{1};
+        ANIS_Calculator gpsZ_anis_{1};
+        ANIS_Calculator sonar_anis_{1};
+        ANIS_Calculator baro_anis_{1};
+        ANIS_Calculator magnet_anis_{1};
+        int num_ANIS_ready = 0; // Counter for number of measurments with anis calculated
 
     public:
         /**
@@ -145,12 +185,17 @@ namespace ee4308::drone
             initParam(this, "var_baro", params_.var_baro);
             initParam(this, "var_magnet_x", params_.var_magnet_x);
             initParam(this, "var_magnet_y", params_.var_magnet_y);
+            initParam(this, "var_process_baro_bias", params_.var_process_baro_bias);
+            initParam(this, "var_process_sonar_bias", params_.var_process_baro_bias);
             initParam(this, "var_sonar", params_.var_sonar);
             initParam(this, "rad_polar", params_.rad_polar);
             initParam(this, "rad_equator", params_.rad_equator);
             initParam(this, "keep_old_sonar", params_.keep_old_sonar);
             initParam(this, "verbose", params_.verbose);
             initParam(this, "use_gt", params_.use_gt);
+            initParam(this, "check_consistency", params_.check_consistency);
+            initParam(this, "num_samples", params_.num_samples);
+            initParam(this, "anis_save_file", params_.anis_save_file);
         }
 
         void initTopics()
@@ -368,7 +413,7 @@ namespace ee4308::drone
 
             // Run Kalman correction
             const static Eigen::Matrix<double,1,2> H_gps{1,0};
-            const static Eigen::Matrix<double,1,3> H_gps_z{1,0,0};
+            const static Eigen::Matrix<double,1,4> H_gps_z{1,0,0,0};
             const static double R_gps_x = params_.var_gps_x;
             const static double R_gps_y = params_.var_gps_y;
             const static double R_gps_z = params_.var_gps_z;
@@ -376,14 +421,26 @@ namespace ee4308::drone
                     /(H_gps*Px_*H_gps.transpose() + R_gps_x);
             const Eigen::Vector2d K_y = Py_*H_gps.transpose()
                     /(H_gps*Py_*H_gps.transpose() + R_gps_y);
-            const Eigen::Vector3d K_z = Pz_*H_gps_z.transpose()
+            const Eigen::Vector4d K_z = Pz_*H_gps_z.transpose()
                     /(H_gps_z*Pz_*H_gps_z.transpose() + R_gps_z);
+
+            if(params_.check_consistency && gpsX_anis_.getNumSamples()<params_.num_samples)
+            {
+                gpsX_anis_.addMeasurement(Ygps_(0) - H_gps*Xx_, H_gps*Px_*H_gps.transpose() + R_gps_x);
+                gpsY_anis_.addMeasurement(Ygps_(1) - H_gps*Xy_, H_gps*Py_*H_gps.transpose() + R_gps_y);
+                gpsZ_anis_.addMeasurement(Ygps_(2) - H_gps_z*Xz_, H_gps_z*Pz_*H_gps_z.transpose() + R_gps_z);
+                if(gpsX_anis_.getNumSamples() == params_.num_samples)
+                {
+                    num_ANIS_ready++;
+                    print_anis_if_ready();
+                }
+            }
             Xx_ = Xx_ + K_x*(Ygps_(0) - H_gps*Xx_);
             Xy_ = Xy_ + K_y*(Ygps_(1) - H_gps*Xy_);
             Xz_ = Xz_ + K_z*(Ygps_(2) - H_gps_z*Xz_);
             Px_ -= K_x*H_gps*Px_;
             Py_ -= K_y*H_gps*Py_;
-            Pz_ -= K_z*H_gps_z*Pz_;     
+            Pz_ -= K_z*H_gps_z*Pz_;    
             // --- EOFIXME ---
         }
 
@@ -400,17 +457,27 @@ namespace ee4308::drone
             }
 
             // Apply lowpass filter (exponential forgetting)
-            const double alpha = 0.5;
-            Ysonar_ = alpha * new_Ysonar + (1 - alpha) * Ysonar_;
+            // const double alpha = 0.5;
+            // Ysonar_ = alpha * new_Ysonar + (1 - alpha) * Ysonar_;
+            Ysonar_ = new_Ysonar;
             
-            double h_X_zk = Xz_(0);
             // Create H vector [1 0]
-            Eigen::Matrix<double,1,3> H_sonar{1,0,0};
+            Eigen::Matrix<double,1,4> H_sonar{1,0,0,1};
             double R = params_.var_sonar;
+            if(params_.check_consistency && sonar_anis_.getNumSamples()<params_.num_samples)
+            {
+                sonar_anis_.addMeasurement(Ysonar_ - H_sonar*Xz_, H_sonar*Pz_*H_sonar.transpose() + R);
+                if(sonar_anis_.getNumSamples() == params_.num_samples)
+                {
+                    num_ANIS_ready++;
+                    print_anis_if_ready();
+                }
+            }
             // Correct z
-            const Eigen::Vector3d K_z = Pz_*H_sonar.transpose()/(H_sonar*Pz_*H_sonar.transpose() + R);
-            Xz_ = Xz_ + K_z*(Ysonar_ - h_X_zk);
+            const Eigen::Vector4d K_z = Pz_*H_sonar.transpose()/(H_sonar*Pz_*H_sonar.transpose() + R);
+            Xz_ = Xz_ + K_z*(Ysonar_ - H_sonar*Xz_);
             Pz_ = Pz_ - K_z*H_sonar*Pz_;
+            Pz_(3,3) += params_.var_process_sonar_bias;
         }
 
         // ================================ Magnetic sub callback / EKF Correction ========================================
@@ -433,6 +500,15 @@ namespace ee4308::drone
             const static Eigen::Matrix<double,1,2> H_magnet{1,0};
             const double R_magnet = sqrt((pow(Xa_(0)*params_.var_magnet_y,2) + pow(Xa_(1)*params_.var_magnet_x,2)))
                                         /(pow(Xa_(0),2) + pow(Xa_(1),2));
+            if(params_.check_consistency && magnet_anis_.getNumSamples()<params_.num_samples)
+            {
+                magnet_anis_.addMeasurement(Ymagnet_ - H_magnet*Xa_, H_magnet*Pa_*H_magnet.transpose() + R_magnet);
+                if(magnet_anis_.getNumSamples() == params_.num_samples)
+                {
+                    num_ANIS_ready++;
+                    print_anis_if_ready();
+                }
+            }   
             const Eigen::Vector2d K_a = Pa_*H_magnet.transpose()
                     /(H_magnet*Pa_*H_magnet.transpose() + R_magnet);
             Xa_ += K_a*(limit_angle(Ymagnet_ - H_magnet*Xa_));
@@ -451,13 +527,25 @@ namespace ee4308::drone
             // --- FIXME ---
             Ybaro_ = msg.point.z;
             // Create H vector [1 0, 1]
-            Eigen::Matrix<double,1,3> H_bar{1,0,1};
+            Eigen::Matrix<double,1,4> H_bar{1,0,1,0};
             double R = params_.var_baro;
             // Correct z
+            if(params_.check_consistency && baro_anis_.getNumSamples()<params_.num_samples)
+            {
+                baro_anis_.addMeasurement(Ybaro_ - H_bar*Xz_, H_bar*Pz_*H_bar.transpose() + R);
+                if(baro_anis_.getNumSamples() == params_.num_samples)
+                {
+                    num_ANIS_ready++;
+                    print_anis_if_ready();
+                }
+            }
 
-            const Eigen::Vector3d K_z = Pz_*H_bar.transpose()/(H_bar*Pz_*H_bar.transpose() + R);
+            const Eigen::Vector4d K_z = Pz_*H_bar.transpose()/(H_bar*Pz_*H_bar.transpose() + R);
             Xz_ += K_z*(Ybaro_ - H_bar*Xz_);
             Pz_ -= K_z*H_bar*Pz_;
+            // Process noise on the bias state enters here
+            // Bias is completely independently estimated in this function
+            Pz_(2,2) += params_.var_process_baro_bias;
             std::cout<<"Barometer bias: "<<Xz_(2)<<std::endl;
             std::cout<<"Covariance matrix for z after baro update: "<<Pz_<<std::endl;
             // Correct z
@@ -515,11 +603,15 @@ namespace ee4308::drone
             //std::cout << "Xy_ = " << Xy_ << std::endl;
 
             // Predict z
-            Eigen::Matrix3d Fzk;
-            Fzk << 1, dt, 0, 0, 1, 0, 0, 0, 1;
+            Eigen::Matrix4d Fzk{
+                {1, dt, 0, 0},
+                {0, 1, 0, 0},
+                {0, 0, 1, 0},
+                {0, 0, 0, 1}
+            };
 
-            Eigen::Vector3d Wzk;
-            Wzk << 0.5*dt*dt, dt, 0;
+            Eigen::Vector4d Wzk;
+            Wzk << 0.5*dt*dt, dt, 0, 0;
 
             // Processs noise on the bias state enters here
 
@@ -559,5 +651,22 @@ namespace ee4308::drone
             // Px_, Py_, Pz_, Pa_
             // --- EOFIXME ---
         }
+        void print_anis_if_ready()
+        {
+            if(num_ANIS_ready == 4)
+            {
+                std::ofstream anis_file;
+                anis_file.open(params_.anis_save_file);
+                anis_file<<"ANIS ready for all measurements"<<std::endl;
+                anis_file<<"ANIS for GPS X: "<<gpsX_anis_.getANIS()<<std::endl;
+                anis_file<<"ANIS for GPS Y: "<<gpsY_anis_.getANIS()<<std::endl;
+                anis_file<<"ANIS for GPS Z: "<<gpsZ_anis_.getANIS()<<std::endl;
+                anis_file<<"ANIS for Sonar: "<<sonar_anis_.getANIS()<<std::endl;
+                anis_file<<"ANIS for Baro: "<<baro_anis_.getANIS()<<std::endl;
+                anis_file<<"ANIS for Magnet: "<<magnet_anis_.getANIS()<<std::endl;
+            }
+        }
     };
 }
+
+

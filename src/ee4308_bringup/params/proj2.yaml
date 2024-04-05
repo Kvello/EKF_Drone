@@ -21,7 +21,7 @@ drone:
       topics:
         odom_drone: "odom2" # cannot use odom
         waypoint: "waypoint"
-        cmd_vel: "cmd_vel"
+        cmd_vel: "ccmd_vel"
         lookahead: "lookahead"
       frame_id: "/world"
       lookahead_distance: 1.0
@@ -58,24 +58,30 @@ drone:
         gt_vel: "gt_vel"
       frequency: 10.0
       G: 9.8
-      var_imu_x: 0.1
-      var_imu_y: 0.1
-      var_imu_z: 0.4
-      var_imu_a: 1e-6
+      var_imu_x: 5.
+      var_imu_y: 4.
+      var_imu_z: 10.
+      var_imu_a: 1e-20
       var_gps_x: 0.05
-      var_gps_y: 0.04
-      var_gps_z: 0.03
-      var_baro: 0.1
-      var_sonar: 0.1
-      var_magnet_x: 0.0004
-      var_magnet_y: 0.0004
+      var_gps_y: 0.07
+      var_gps_z: 0.64
+      var_baro: 0.012
+      var_sonar: 0.0002
+      var_magnet_x: 0.00018
+      var_magnet_y: 0.0002
+      var_process_baro_bias: 0.5
+      var_process_sonar_bias: 2.0
       rad_polar: 6356752.3
       rad_equator: 6378137.0
       keep_old_sonar: 0.5
       use_gt: false
       verbose: true
       use_sim_time: true
-
+      check_consistency: false
+      num_samples: 100
+      anis_save_file: "anis.txt"
+# Setting check_consistency to true will check the consistency of the filter by calculating ANIS for each measurement
+# Num samples is ignored if check_consistency is set to false
 ######################################################
 
 turtle:
