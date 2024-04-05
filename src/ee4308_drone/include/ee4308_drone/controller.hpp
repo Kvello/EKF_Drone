@@ -391,8 +391,11 @@ namespace ee4308::drone
             double acc_z = (v_z_desired - prev_v_z) / elapsed_;
             acc_z = acc_z > params_.max_vert_acc ? params_.max_vert_acc : acc_z;
             acc_z = acc_z < -params_.max_vert_acc ? -params_.max_vert_acc : acc_z;
-            const double v_h = prev_v_h + acc_h * elapsed_;
-            const double v_z = prev_v_z + acc_z * elapsed_;
+            double v_h = abs(prev_v_h + acc_h * elapsed_);
+            double v_z = prev_v_z + acc_z * elapsed_;
+            v_h = v_h > params_.max_horz_vel ? params_.max_horz_vel : v_h;
+            v_z = v_z > params_.max_vert_vel ? params_.max_vert_vel : v_z;
+            v_z = v_z < -params_.max_vert_vel ? -params_.max_vert_vel : v_z;
             cmd_vel_.linear.x = v_h * e_local(0) / e_local.norm();
             cmd_vel_.linear.y = v_h * e_local(1) / e_local.norm();
             cmd_vel_.linear.z = v_z;
