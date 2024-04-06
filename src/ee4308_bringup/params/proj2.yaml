@@ -76,7 +76,7 @@ drone:
       use_gt: false
       verbose: true
       use_sim_time: true
-      check_consistency: true
+      check_consistency: false
       num_samples: 100
       anis_save_file: "anis.txt"
 # Setting check_consistency to true will check the consistency of the filter by calculating ANIS for each measurement
