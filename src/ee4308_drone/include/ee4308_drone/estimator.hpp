@@ -543,8 +543,6 @@ namespace ee4308::drone
             // Process noise on the bias state enters here
             // Bias is completely independently estimated in this function
             Pz_(2,2) += params_.var_process_baro_bias;
-            std::cout<<"Barometer bias: "<<Xz_(2)<<std::endl;
-            std::cout<<"Covariance matrix for z after baro update: "<<Pz_<<std::endl;
             // Correct z
             // params_.var_baro
             // --- EOFIXME ---
