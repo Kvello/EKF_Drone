@@ -1,7 +1,7 @@
 ANIS ready for all measurements
-ANIS for GPS X: 0.83421
-ANIS for GPS Y: 0.722279
-ANIS for GPS Z: 122.908
-ANIS for Sonar: 17.0314
-ANIS for Baro: 0.442257
-ANIS for Magnet: 0.00114268
+ANIS for GPS X: 1.10811
+ANIS for GPS Y: 0.795431
+ANIS for GPS Z: 0.746802
+ANIS for Sonar: 0.0237846
+ANIS for Baro: 0.0123319
+ANIS for Magnet: 1.8572

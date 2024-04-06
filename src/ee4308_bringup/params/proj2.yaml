@@ -58,8 +58,8 @@ drone:
         gt_vel: "gt_vel"
       frequency: 10.0
       G: 9.8
-      var_imu_x: 5.
-      var_imu_y: 4.
+      var_imu_x: 0.5
+      var_imu_y: 0.2
       var_imu_z: 10.
       var_imu_a: 1e-20
       var_gps_x: 0.05
@@ -67,8 +67,7 @@ drone:
       var_gps_z: 0.64
       var_baro: 0.012
       var_sonar: 0.0002
-      var_magnet_x: 0.00018
-      var_magnet_y: 0.0002
+      var_magnet: 0.00072
       var_process_baro_bias: 0.5
       var_process_sonar_bias: 2.0
       rad_polar: 6356752.3
@@ -77,7 +76,7 @@ drone:
       use_gt: false
       verbose: true
       use_sim_time: true
-      check_consistency: false
+      check_consistency: true
       num_samples: 100
       anis_save_file: "anis.txt"
 # Setting check_consistency to true will check the consistency of the filter by calculating ANIS for each measurement

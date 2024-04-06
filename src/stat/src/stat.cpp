@@ -75,7 +75,7 @@ Statistician::Statistician(std::string node_name)
     gt_pose_data = Eigen::Matrix<double, 3, Eigen::Dynamic>::Zero(3, num_samples);
     gt_vel_data = Eigen::Matrix<double, 3, Eigen::Dynamic>::Zero(3, num_samples);
     baro_data = Eigen::Matrix<double, 1, Eigen::Dynamic>::Zero(1, num_samples);
-    magnetic_data = Eigen::Matrix<double, 2, Eigen::Dynamic>::Zero(2, num_samples);
+    magnetic_data = Eigen::Matrix<double, 1, Eigen::Dynamic>::Zero(1, num_samples);
     imu_data = Eigen::Matrix<double, 4, Eigen::Dynamic>::Zero(4, num_samples);
     gps_data = Eigen::Matrix<double, 3, Eigen::Dynamic>::Zero(3, num_samples);
     sonar_data = Eigen::Matrix<double, 1, Eigen::Dynamic>::Zero(1, num_samples);
@@ -94,15 +94,15 @@ Statistician::Statistician(std::string node_name)
 void Statistician::calculate_statistics(){
     Eigen::Vector4d imu_mean = imu_data.rowwise().mean();
     Eigen::Vector3d gps_mean = gps_data.rowwise().mean();
-    Eigen::Vector2d magnetic_mean = magnetic_data.rowwise().mean();
+    double magnetic_mean = magnetic_data.mean();
     double baro_mean = baro_data.mean(); 
     double sonar_mean = sonar_data.mean();
     Eigen::Matrix4d imu_cov = 1.0/(params_.num_samples-1)*
         (imu_data.colwise() - imu_mean)*(imu_data.colwise() - imu_mean).transpose();
     Eigen::Matrix3d gps_cov = 1.0/(params_.num_samples-1)*
         (gps_data.colwise() - gps_mean)*(gps_data.colwise() - gps_mean).transpose();
-    Eigen::Matrix2d magnetic_cov = 1.0/(params_.num_samples-1)*
-        (magnetic_data.colwise() - magnetic_mean)*(magnetic_data.colwise() - magnetic_mean).transpose();
+    double magnetic_cov = 1.0/(params_.num_samples-1)*
+        (magnetic_data.array() - magnetic_mean).square().sum();
     double baro_var = 1.0/(params_.num_samples-1)*(baro_data.array() - baro_mean).square().sum();
     double sonar_var = 1.0/(params_.num_samples-1)*(sonar_data.array() - sonar_mean).square().sum();
 
@@ -142,11 +142,10 @@ void Statistician::calculate_statistics(){
     output_file <<"Sonar Variance"<<std::endl;
     output_file << sonar_var << std::endl;
     output_file << "***************Magnetometer****************"<<std::endl;
-    output_file << "Magnetometer mean (x,y),"<<std::endl;
-    output_file << magnetic_mean(0) << ", " << magnetic_mean(1) << std::endl;
-    output_file << "Magnetometer Covariance(x,y)"<<std::endl;
-    output_file << magnetic_cov(0,0) << ", " << magnetic_cov(0,1) << std::endl;
-    output_file << magnetic_cov(1,0) << ", " << magnetic_cov(1,1) << std::endl;
+    output_file << "Magnetometer mean (psi) ,"<<std::endl;
+    output_file << magnetic_mean<<std::endl;
+    output_file << "Magnetometer Covariance(psi)"<<std::endl;
+    output_file << magnetic_cov << std::endl;
     output_file.close();
     return;
 }
@@ -296,20 +295,17 @@ void Statistician::magnetic_callback(const geometry_msgs::msg::Vector3Stamped::S
     static double prev_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
     static double delta_T = 0.0;
     static uint64_t sample_count = 0;
-    static Eigen::Matrix<double, 2, 1> prev_data{msg->vector.x,
-                                                 msg->vector.y};
+    static double prev_data{atan2(-msg->vector.y, msg->vector.x)};
     if(magnetic_data_ready){
         return;
     }
     double current_time = msg->header.stamp.sec + 1e-9*msg->header.stamp.nanosec;
-    auto data = msg->vector;
+    double psi = atan2(-msg->vector.y, msg->vector.x);
     delta_T += current_time - prev_time;
     while(delta_T >= 1/params_.sample_frequency && sample_count < params_.num_samples){
         delta_T -= 1/params_.sample_frequency;
-        magnetic_data(0,sample_count) = interpolate(prev_data(0),
-            data.x, prev_time, current_time, current_time-delta_T);
-        magnetic_data(1,sample_count) = interpolate(prev_data(1),
-            data.y, prev_time, current_time, current_time-delta_T);
+        magnetic_data(0,sample_count) = interpolate(prev_data,
+            psi, prev_time, current_time, current_time-delta_T);
         sample_count++;
     }
     if(sample_count >= params_.num_samples){
@@ -327,8 +323,7 @@ void Statistician::magnetic_callback(const geometry_msgs::msg::Vector3Stamped::S
         return;
     }
     prev_time = current_time;
-    prev_data(0) = data.x;
-    prev_data(1) = data.y;
+    prev_data = atan2(-msg->vector.y,msg->vector.x);
     return;
 }
 void Statistician::imu_callback(const sensor_msgs::msg::Imu::SharedPtr msg){

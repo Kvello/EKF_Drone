@@ -76,8 +76,7 @@ namespace ee4308::drone
         double var_gps_z = 0.1;
         double var_baro = 0.1;
         double var_sonar = 0.1;
-        double var_magnet_x = 0.1;
-        double var_magnet_y = 0.1;
+        double var_magnet = 0.1;
         double var_process_baro_bias = 0.5;
         double var_process_sonar_bias = 0.5;
         double rad_polar = 6356752.3;
@@ -183,8 +182,7 @@ namespace ee4308::drone
             initParam(this, "var_gps_y", params_.var_gps_y);
             initParam(this, "var_gps_z", params_.var_gps_z);
             initParam(this, "var_baro", params_.var_baro);
-            initParam(this, "var_magnet_x", params_.var_magnet_x);
-            initParam(this, "var_magnet_y", params_.var_magnet_y);
+            initParam(this, "var_magnet", params_.var_magnet);
             initParam(this, "var_process_baro_bias", params_.var_process_baro_bias);
             initParam(this, "var_process_sonar_bias", params_.var_process_baro_bias);
             initParam(this, "var_sonar", params_.var_sonar);
@@ -498,8 +496,7 @@ namespace ee4308::drone
             // Magnetometer measurement is in a different frame with y'=-y
             Ymagnet_ = atan2(-msg.vector.y, msg.vector.x);
             const static Eigen::Matrix<double,1,2> H_magnet{1,0};
-            const double R_magnet = sqrt((pow(Xa_(0)*params_.var_magnet_y,2) + pow(Xa_(1)*params_.var_magnet_x,2)))
-                                        /(pow(Xa_(0),2) + pow(Xa_(1),2));
+            const double R_magnet = params_.var_magnet;
             if(params_.check_consistency && magnet_anis_.getNumSamples()<params_.num_samples)
             {
                 magnet_anis_.addMeasurement(Ymagnet_ - H_magnet*Xa_, H_magnet*Pa_*H_magnet.transpose() + R_magnet);
